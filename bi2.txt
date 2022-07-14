@@ -1,0 +1,313 @@
+2022-03-30 16:07:58 | Obtaining samples...
+Sampling
+==> Itr 10/10 (elapsed:0.22)
+	Loss:2.961903
+2022-03-30 16:08:14 | epoch #0 | Optimizing policy...
+2022-03-30 16:08:14 | epoch #0 | Computing loss before
+2022-03-30 16:08:15 | epoch #0 | Computing KL before
+2022-03-30 16:08:15 | epoch #0 | Optimizing
+2022-03-30 16:08:15 | epoch #0 | Start CG optimization: #parameters: 1992, #inputs: 11, #subsample_inputs: 11
+2022-03-30 16:08:15 | epoch #0 | computing loss before
+2022-03-30 16:08:15 | epoch #0 | computing gradient
+2022-03-30 16:08:16 | epoch #0 | gradient computed
+2022-03-30 16:08:16 | epoch #0 | computing descent direction
+2022-03-30 16:08:17 | epoch #0 | descent direction computed
+2022-03-30 16:08:17 | epoch #0 | backtrack iters: 1
+2022-03-30 16:08:17 | epoch #0 | optimization finished
+2022-03-30 16:08:17 | epoch #0 | Computing KL after
+2022-03-30 16:08:17 | epoch #0 | Computing loss after
+2022-03-30 16:08:17 | epoch #0 | Fitting baseline...
+2022-03-30 16:08:17 | epoch #0 | Time 19.83 s
+2022-03-30 16:08:17 | epoch #0 | EpochTime 19.83 s
+---------------------------------------  ---------------
+Discriminator_acc                            0.5
+Evaluation/AverageDiscountedReturn         -10.1187
+Evaluation/AverageReturn                  -119.301
+Evaluation/Iteration                         0
+Evaluation/MaxReturn                      -109.663
+Evaluation/MinReturn                      -130.847
+Evaluation/NumEpisodes                      11
+Evaluation/StdReturn                         5.36546
+Evaluation/TerminationRate                   1
+Extras/EpisodeRewardMean                  -119.301
+GCLDiscrimLoss                               2.9619
+LinearFeatureBaseline/ExplainedVariance     -7.20024e-09
+RegLossCenter                                0.000890514
+RegLossPeri                                  0.0518632
+TotalEnvSteps                            10989
+policy_0/Entropy                             5.70879
+policy_0/KL                                  0.00653966
+policy_0/KLBefore                            0
+policy_0/LossAfter                          -0.0157716
+policy_0/LossBefore                          2.42996e-09
+policy_0/Perplexity                        301.505
+policy_0/dLoss                               0.0157716
+---------------------------------------  ---------------
+Sampling
+2022-03-30 16:08:25 | Obtaining samples...
+Sampling
+==> Itr 10/10 (elapsed:0.29)
+	Loss:2.835639
+2022-03-30 16:08:42 | epoch #0 | Optimizing policy...
+2022-03-30 16:08:42 | epoch #0 | Computing loss before
+2022-03-30 16:08:42 | epoch #0 | Computing KL before
+2022-03-30 16:08:43 | epoch #0 | Optimizing
+2022-03-30 16:08:43 | epoch #0 | Start CG optimization: #parameters: 1992, #inputs: 11, #subsample_inputs: 11
+2022-03-30 16:08:43 | epoch #0 | computing loss before
+2022-03-30 16:08:43 | epoch #0 | computing gradient
+2022-03-30 16:08:43 | epoch #0 | gradient computed
+2022-03-30 16:08:43 | epoch #0 | computing descent direction
+2022-03-30 16:08:44 | epoch #0 | descent direction computed
+2022-03-30 16:08:45 | epoch #0 | backtrack iters: 0
+2022-03-30 16:08:45 | epoch #0 | optimization finished
+2022-03-30 16:08:45 | epoch #0 | Computing KL after
+2022-03-30 16:08:45 | epoch #0 | Computing loss after
+2022-03-30 16:08:46 | epoch #0 | Fitting baseline...
+2022-03-30 16:08:46 | epoch #0 | Time 20.13 s
+2022-03-30 16:08:46 | epoch #0 | EpochTime 20.13 s
+---------------------------------------  ---------------
+Discriminator_acc                            0.5
+Evaluation/AverageDiscountedReturn         -50.3517
+Evaluation/AverageReturn                  -536.523
+Evaluation/Iteration                         0
+Evaluation/MaxReturn                      -492.604
+Evaluation/MinReturn                      -579.605
+Evaluation/NumEpisodes                      11
+Evaluation/StdReturn                        24.3843
+Evaluation/TerminationRate                   1
+Extras/EpisodeRewardMean                  -536.523
+GCLDiscrimLoss                               2.83564
+LinearFeatureBaseline/ExplainedVariance     -1.23308e-10
+RegLossCenter                                0.000957382
+RegLossPeri                                  0.073456
+TotalEnvSteps                            10989
+policy_1/Entropy                             5.68496
+policy_1/KL                                  0.00987418
+policy_1/KLBefore                            0
+policy_1/LossAfter                          -0.0207926
+policy_1/LossBefore                         -3.88794e-08
+policy_1/Perplexity                        294.405
+policy_1/dLoss                               0.0207925
+---------------------------------------  ---------------
+Sampling
+-----------------  -----------------
+Best_Mixture       [1.]
+Demonstration      3
+Mixture_distance   38.97800823028874
+New_airl_distance  38.76063804314776
+Samples            0
+-----------------  -----------------
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
+Sampling
