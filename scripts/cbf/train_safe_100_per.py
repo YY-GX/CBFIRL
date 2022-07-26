@@ -16,6 +16,11 @@ from envs.carEnv import carEnv
 from garage.envs import GymEnv
 import pickle
 from garage.experiment import deterministic
+from datetime import datetime
+from torch.utils.tensorboard import SummaryWriter
+from models.architectures import relu_net
+
+
 
 np.set_printoptions(4)
 
@@ -67,8 +72,14 @@ def build_optimizer(loss):
             gradient_vars_h.append((accumulate_grad, var))
         elif 'action' in var.name:
             gradient_vars_a.append((accumulate_grad, var))
+        elif 'reward' in var.name:
+            continue
         else:
             raise ValueError
+
+
+    print('---------------------')
+
 
     train_step_h = optimizer.apply_gradients(gradient_vars_h)
     train_step_a = optimizer.apply_gradients(gradient_vars_a)
@@ -107,6 +118,7 @@ def build_training_graph(num_agents, env, policy):
     # observation
     # ob = tf.placeholder(tf.float32, [(min(num_agents, config.TOP_K + 1)) * 4, ])
     obv = tf.placeholder(tf.float32, shape=(1, num_agents * 4), name='ph_obv')
+    obv_next = tf.placeholder(tf.float32, shape=(1, num_agents * 4), name='ph_obv_next')
     # ob = tf.placeholder(tf.float32)
     other_as = tf.placeholder(tf.float32, [min(num_agents - 1, config.TOP_K), 2], name='ph_other_as')
 
@@ -127,7 +139,7 @@ def build_training_graph(num_agents, env, policy):
 
     a_agent = get_action_graph(num_agents, obv, policy)
     # a_agent = policy.get_action(ob)[0]
-    print(a_agent)
+    # print(a_agent)
     a = tf.concat([other_as, a_agent], 0)
 
 
@@ -148,18 +160,34 @@ def build_training_graph(num_agents, env, policy):
 
     # TODO: delete this one
     # the distance between the a and the nominal a  YY: this is the goal reaching loss
-    # loss_action = core.loss_actions(
-    #     s=s, g=g, a=a, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION)
+    loss_action = core.loss_actions(
+        s=s, g=g, a=a, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION)
 
 
-    loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv]  # YY: 0.01 original for loss_action
+    # # TODO: Add reward loss [r(s, a)]
+    # a_reward_input = tf.reshape(a[-1, :], [1, 2])
+    # rew_input = tf.concat([obv, a_reward_input], axis=1)
+    # with tf.variable_scope('reward'):
+    #     loss_reward = tf.reduce_sum(-relu_net(rew_input))
+
+
+    # TODO: Add reward loss [r(T(s, pi(s)))]
+    dsdt = tf.concat([tf.reshape(s[-1, 2:], (1, 2)), tf.reshape(a[-1, :], (1, 2))], axis=1)  # YY: dsdt = [vx, vy, ax, ay]
+    agent_state = tf.reshape((s[-1, :] + dsdt * config.TIME_STEP), (1, 4))
+    rew_input = tf.concat([obv_next[:, :-4], agent_state], axis=1)
+    with tf.variable_scope('reward'):
+        loss_reward = tf.reduce_sum(-relu_net(rew_input))
+
+
+    loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv, 0.1 * loss_reward]  # YY: 0.01 original for loss_action
+    # loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv]  # YY: 0.01 original for loss_action
     acc_list = [acc_dang, acc_safe, acc_dang_deriv, acc_safe_deriv]
 
     weight_loss = [
         config.WEIGHT_DECAY * tf.nn.l2_loss(v) for v in tf.trainable_variables()]
     loss = 10 * tf.math.add_n(loss_list + weight_loss)
 
-    return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent
+    return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, obv_next
 
 
 def count_accuracy(accuracy_lists):
@@ -174,7 +202,18 @@ def main():
     args = parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
-    log_path = f"data/yy/08_07_2022_17_40_20_good"
+    log_path = f"data/yy/17_07_2022_16_52_03"
+    log_path = f"data/yy/22_07_2022_16_38_54"
+    log_path = f"data/yy/22_07_2022_17_00_38"  # r(s, a)
+    log_path = f"data/yy/25_07_2022_18_57_41"  # r(s)
+
+
+
+
+    now = datetime.now()
+    save_path = f"data/saved_cbf_policies/{now.strftime('%d_%m_%Y_%H_%M_%S')}"
+
+    writer = SummaryWriter(log_path)
 
     env_graph = GymEnv(carEnv(), max_episode_length=50)
     env = carEnv()
@@ -191,7 +230,7 @@ def main():
                                    env_spec=env_graph.spec,
                                    hidden_sizes=(32, 32))
 
-        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent = build_training_graph(args.num_agents, env_graph, policy)
+        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, obv_next = build_training_graph(args.num_agents, env, policy)
         zero_ops, accumulate_ops, train_step_h, train_step_a = build_optimizer(loss)
 
         accumulate_ops.append(loss_list)
@@ -201,13 +240,28 @@ def main():
         # sess.run(tf.variables_initializer(var_list=all_other_vars))
         sess.run(tf.global_variables_initializer())
 
-        # TODO: restore policy params
+        # Restore policy params
 
         save_dictionary = {}
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                               scope=f'action')):
+            if idx > 6:
+                break
             save_dictionary[f'action_0_{idx}'] = var
+
+        # for idx, var in enumerate(
+        #     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+        #                       scope=f'skill_0/discrim/reward')):
+        #     print(var.name)
+        #     save_dictionary[f'reward_0_{idx}'] = var
+
+        for idx, var in enumerate(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              scope=f'reward')):
+            print(var.name)
+            save_dictionary[f'reward_0_{idx}'] = var
+
 
         saver = tf.train.Saver(save_dictionary)
         saver.restore(sess, f"{log_path}/model")
@@ -217,10 +271,10 @@ def main():
 
 
 
-        saver = tf.train.Saver()
-
-        if args.model_path:
-            saver.restore(sess, args.model_path)
+        # saver = tf.train.Saver()
+        #
+        # if args.model_path:
+        #     saver.restore(sess, args.model_path)
 
 
 
@@ -240,7 +294,7 @@ def main():
             ob = env.reset()
             traj_id = env.get_traj_id()
             # read demonstrations
-            with open('src/demonstrations/safe_demo_1.pkl', 'rb') as f:
+            with open('src/demonstrations/safe_demo_4.pkl', 'rb') as f:
                 demonstrations = pickle.load(f)
 
             all_actions = demonstrations[traj_id]['actions']
@@ -271,15 +325,25 @@ def main():
                 # a_input = tf.concat([other_a, a_agent], 0)
 
                 # computes the control input a_np using the safe controller
-                a_np, out = sess.run([a, accumulate_ops], feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a})
 
-                if np.random.uniform() < config.ADD_NOISE_PROB:
-                    noise = np.random.normal(size=np.shape(a_np)) * config.NOISE_SCALE
-                    a_np = a_np + noise
+                a_np = sess.run([a],
+                                     feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a})
+
+                # a_np, out = sess.run([a, accumulate_ops], feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a})
+
+                # if np.random.uniform() < config.ADD_NOISE_PROB:
+                #     noise = np.random.normal(size=np.shape(a_np)) * config.NOISE_SCALE
+                #     a_np = a_np + noise
 
                 # YY: Get ob # simulate the system for one step
-                ob, rew, done, info = env.step(a_np[-1, :])
+                ob_next, rew, done, info = env.step(a_np[0][-1, :])
+                # ob_next, rew, done, info = env.step(a_np[-1, :])
                 s_np = ob.reshape([-1, 4])
+
+                out = sess.run([accumulate_ops],
+                                     feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a, obv_next: ob_next.reshape([1, 36])})[0]
+
+                ob = ob_next
 
                 # # simulate the system for one step
                 # s_np = s_np + np.concatenate([s_np[:, 2:], a_np], axis=1) * config.TIME_STEP
@@ -298,24 +362,24 @@ def main():
                     ) < config.DIST_MIN_CHECK:
                     break
 
-            # run the system with the LQR controller without collision avoidance as the baseline
-            for i in range(accumulation_steps):
-                state_gain = np.eye(2, 4) + np.eye(2, 4, k=2) * np.sqrt(3)
-                s_ref_lqr = np.concatenate([s_np_lqr[:, :2] - g_np_lqr, s_np_lqr[:, 2:]], axis=1)
-                a_lqr = -s_ref_lqr.dot(state_gain.T)
-                s_np_lqr = s_np_lqr + np.concatenate([s_np_lqr[:, 2:], a_lqr], axis=1) * config.TIME_STEP
-                s_np_lqr[:, :2] = np.clip(s_np_lqr[:, :2], 0, 1)
-                safety_ratio_lqr = 1 - np.mean(core.ttc_dangerous_mask_np(
-                    s_np_lqr, config.DIST_MIN_CHECK, config.TIME_TO_COLLISION_CHECK), axis=1)
-                safety_ratio = np.mean(safety_ratio == 1)
-                safety_ratios_epoch_lqr.append(safety_ratio_lqr)
+            # # run the system with the LQR controller without collision avoidance as the baseline
+            # for i in range(accumulation_steps):
+            #     state_gain = np.eye(2, 4) + np.eye(2, 4, k=2) * np.sqrt(3)
+            #     s_ref_lqr = np.concatenate([s_np_lqr[:, :2] - g_np_lqr, s_np_lqr[:, 2:]], axis=1)
+            #     a_lqr = -s_ref_lqr.dot(state_gain.T)
+            #     s_np_lqr = s_np_lqr + np.concatenate([s_np_lqr[:, 2:], a_lqr], axis=1) * config.TIME_STEP
+            #     s_np_lqr[:, :2] = np.clip(s_np_lqr[:, :2], 0, 1)
+            #     safety_ratio_lqr = 1 - np.mean(core.ttc_dangerous_mask_np(
+            #         s_np_lqr, config.DIST_MIN_CHECK, config.TIME_TO_COLLISION_CHECK), axis=1)
+            #     safety_ratio = np.mean(safety_ratio == 1)
+            #     safety_ratios_epoch_lqr.append(safety_ratio_lqr)
+            #
+            #     if np.mean(
+            #         np.linalg.norm(s_np_lqr[:, :2] - g_np_lqr, axis=1)
+            #         ) < config.DIST_MIN_CHECK:
+            #         break
 
-                if np.mean(
-                    np.linalg.norm(s_np_lqr[:, :2] - g_np_lqr, axis=1)
-                    ) < config.DIST_MIN_CHECK:
-                    break
             dist_errors_np.append(np.mean(np.linalg.norm(s_np[:, :2] - g_np, axis=1)))
-
 
 
 
@@ -323,18 +387,35 @@ def main():
                 sess.run(train_step_h)
             else:
                 sess.run(train_step_a)
-            
+
+
+
+
+
+
+
             if np.mod(istep, config.DISPLAY_STEPS) == 0:
                 print('Step: {}, Loss: {}, Accuracy: {}'.format(
                     istep, np.mean(loss_lists_np, axis=0), 
                     np.array(count_accuracy(acc_lists_np))))
                 loss_lists_np, acc_lists_np, dist_errors_np, safety_ratios_epoch, safety_ratios_epoch_lqr = [], [], [], [], []
 
+
+            # writer.add_scalar('Loss', np.mean(loss_lists_np, axis=0), istep)
+            #
+            # writer.add_scalar('safety_ratio', np.mean(safety_ratios_epoch, axis=0), istep)
+
+
+
             if np.mod(istep, config.SAVE_STEPS) == 0 or istep + 1 == config.TRAIN_STEPS:
                 if not os.path.exists(args.save_path):
                     os.makedirs(args.save_path)
                 saver.save(sess, os.path.join(args.save_path, 'model_iter_{}'.format(istep)))
 
+
+
+        # Save model
+        saver.save(sess, f"{save_path}/model")
 
 if __name__ == '__main__':
     main()

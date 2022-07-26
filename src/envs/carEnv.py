@@ -5,10 +5,14 @@ import gym
 import random
 import envs.config as config
 import pickle
-
+import os
 from gym import Env, spaces
 import time
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from models.architectures import relu_net
+import tensorflow as tf
+from garage.tf.policies import GaussianMLPPolicy
+from garage.envs import GymEnv
 
 class carEnv(Env):
     def __init__(self):
@@ -17,7 +21,7 @@ class carEnv(Env):
         random.seed(config.SEED)
 
         # read demonstrations
-        with open('src/demonstrations/safe_demo_1.pkl', 'rb') as f:
+        with open('src/demonstrations/safe_demo_correct.pkl', 'rb') as f:
             self.demonstrations = pickle.load(f)
 
         obs_num = self.demonstrations[0]['observations'][0].shape[0]
@@ -83,7 +87,9 @@ class carEnv(Env):
             self.timestep = len(self.traj['observations']) - 1
         # step of the agent
         dsdt = np.concatenate([self.agent_state[2:], action])  # YY: dsdt = [vx, vy, ax, ay]
+        # print(dsdt)
         self.agent_state = self.agent_state + dsdt * config.TIME_STEP
+        # print(self.agent_state)
 
         # step of the obs
 
@@ -108,6 +114,7 @@ class carEnv(Env):
         if np.linalg.norm(self.agent_state[:2] - self.goal_state[:2]) < config.DIST_MIN_CHECK:
             # print("Done, goal reached!")
             # done = True
+            # self.agent_state[2:] = 0
             self.success = 1
 
         elif not np.all(np.linalg.norm(self.obs_state[:, :2] - self.agent_state[:2], axis = 1) > config.DIST_MIN_CHECK):
@@ -132,7 +139,8 @@ class carEnv(Env):
 
     def close(self):
         # TODO
-        plt.clf()
+        pass
+        # plt.clf()
 
 
     def draw_fig(self):
@@ -180,36 +188,176 @@ class carEnv(Env):
         self.traj = self.demonstrations[self.__traj_id]
         return self.traj['observations'][0], self.traj['observations'][-1][:, :2]
 
+
+
+
+
+
+
+
+
+def save_video(ims, filename, fps=30.0):
+    import cv2
+    folder = os.path.dirname(filename)
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    (height, width, _) = ims[0].shape
+    writer = cv2.VideoWriter(filename, fourcc, fps, (width, height))
+    for im in ims:
+        writer.write(im)
+    writer.release()
+
+
+
+
+
 if __name__ == "__main__":
-    env = carEnv()
-    obs = env.reset()
+    # # load reward
+    # log_path = f"data/yy/22_07_2022_17_00_38"  # r(s, a)
+    # # log_path = f"data/yy/25_07_2022_18_57_41"  # r(s)
+    #
+    # save_dictionary = {}
+    # env = GymEnv(carEnv(), max_episode_length=50)
+    # with tf.Session() as sess:
+    #     ph_obv = tf.placeholder(tf.float32, shape=(9 * 4), name='ph_obv')
+    #     a = tf.placeholder(tf.float32, shape=(2,), name='ph_a')
+    #     rew_input = tf.reshape(ph_obv, [1, 36])
+    #     rew_input = tf.concat([tf.reshape(ph_obv, [1, 36]), tf.reshape(a, [1, 2])], axis=1)
+    #     with tf.variable_scope('skill_0/discrim/reward'):
+    #         # loss_reward = tf.reduce_sum(relu_net(rew_input, dout=1, **{}))
+    #         loss_reward = relu_net(rew_input, dout=1, **{})
+    #
+    #     for idx, var in enumerate(
+    #             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+    #                               scope=f'skill_0/discrim/reward')):
+    #         # print(var.name)
+    #         # print(var)
+    #         save_dictionary[f'reward_0_{idx}'] = var
+    #
+    #     saver = tf.train.Saver(save_dictionary)
+    #     saver.restore(sess, f"{log_path}/model")
+    #
+    #
+    #
+    #
+    #     # Get agent's traj's actions
+    #     with open('src/demonstrations/safe_demo_4.pkl', 'rb') as f:
+    #         demonstrations = pickle.load(f)
+    #
+    #
+    #     NUM_DEMO = 100
+    #     reward_all_traj = []
+    #     for i in range(NUM_DEMO):
+    #         print('Iter ', i)
+    #         env = carEnv()
+    #         obs = env.reset()
+    #         agent_actions = demonstrations[env.get_traj_id()]['actions']
+    #         agent_actions = demonstrations[i]['actions']
+    #
+    #         tm = 0
+    #         # env.render()
+    #         reward_one_traj = []
+    #         while True:
+    #             # Take a random action
+    #             # action = env.action_space.sample()
+    #             # print(tm)
+    #             if tm >= len(agent_actions):
+    #                 tm = -1
+    #             action = agent_actions[tm][-1, :]
+    #             # print('a: ', action)
+    #             # print('v: ', obs)
+    #
+    #             # action = np.array([0.01, 0.01])
+    #             obs, reward, done, info = env.step(action)
+    #             # print(obs, action)
+    #
+    #             # Render the game
+    #             # env.render()
+    #
+    #             # loss_reward_ = sess.run(loss_reward, {ph_obv: obs})
+    #             loss_reward_ = sess.run(loss_reward, {ph_obv: obs, a: action})
+    #             # print(loss_reward_[0][0])
+    #             reward_one_traj.append(loss_reward_[0][0])
+    #
+    #             if info['success'] == 1:
+    #                 break
+    #
+    #             if done == True:
+    #                 break
+    #
+    #             tm += 1
+    #
+    #         # # show the reward map
+    #         # start_obs, end_obs = env.get_start_goal_states()
+    #         # start_obs, end_obs = start_obs[-1, :2], end_obs[-1, :]
+    #         # for i in range(start_obs[0], end_obs[0], 0.1):
+    #         #     for j in range(start_obs[1], end_obs[1], 0.1):
+    #
+    #         reward_all_traj.append(reward_one_traj)
+    #         env.close()
+    #
+    #     with open('data/debug_data/reward_s_a.pkl', 'wb') as f:
+    #         pickle.dump(reward_all_traj, f)
+
+
+
+
+
+
+
+
+
+
 
     # Get agent's traj's actions
-    with open('src/demonstrations/safe_demo_1.pkl', 'rb') as f:
+    with open('src/demonstrations/safe_demo_5.pkl', 'rb') as f:
         demonstrations = pickle.load(f)
-    agent_actions = demonstrations[env.get_traj_id()]['actions']
+    imgs = []
     for i in range(10):
+        env = carEnv()
+        obs = env.reset()
+
+
+        agent_actions = demonstrations[env.get_traj_id()]['actions']
+        # for i in range(100):
+        #     agent_actions = demonstrations[i]['actions']
+        #     print(len(agent_actions))
+
         agent_actions = demonstrations[i]['actions']
-        print(len(agent_actions))
+        # print(len(agent_actions))
+        #
+        # print(agent_actions[0].shape)
 
-    tm = 0
-    env.render()
-    while True:
-        # Take a random action
-        action = env.action_space.sample()
-        print(tm)
-        if tm >= len(agent_actions):
-            tm = -1
-        action = agent_actions[tm][-1, :]
-        # action = np.array([0.01, 0.01])
-        obs, reward, done, info = env.step(action)
-
-        # Render the game
+        tm = 0
         # env.render()
 
-        if done == True:
-            break
+        while True:
+            imgs.append(env.render('rgb_array'))
+            # Take a random action
+            # action = env.action_space.sample()
+            # print(tm)
+            if tm >= len(agent_actions):
+                tm = -1
+            action = agent_actions[tm][-1, :]
+            # print('a: ', action)
+            # print('v: ', obs)
 
-        tm += 1
+            # action = np.array([0.01, 0.01])
+            obs, reward, done, info = env.step(action)
+            # print(obs, action)
 
-    env.close()
+            # Render the game
+            # env.render()
+
+
+            if done == True:
+                break
+
+            tm += 1
+
+
+        env.close()
+    save_video(imgs, f"data/tmp_videos/demostration_stop.avi")

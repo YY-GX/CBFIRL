@@ -206,7 +206,7 @@ class NPO(RLAlgorithm):
 
         max_itrs = self.discrim_train_itrs
         lr = 1e-3
-        lr = 1e-3  # YY
+        lr = 1e-2  # YY
         mean_loss = self.irl_model.fit(paths, policy=self.policy, itr=itr, lr=lr)
 
         probs = self.irl_model.eval(paths, gamma=self._discount, itr=itr)

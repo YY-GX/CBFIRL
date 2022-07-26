@@ -359,7 +359,7 @@ def main():
             istep + 1, config.EVALUATE_STEPS, end_time - start_time))
 
 
-    demo_flie = open('demonstrations/safe_demo_2.pkl', 'wb')
+    demo_flie = open('src/demonstrations/safe_demo_2.pkl', 'wb')
     pickle.dump(demostrations, demo_flie)
     demo_flie.close()
 

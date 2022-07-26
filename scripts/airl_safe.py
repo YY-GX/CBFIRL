@@ -28,8 +28,8 @@ import dowel
 from dowel import logger, tabular
 
 # YY: params
-NUM_DEMO_USED = 10
-EPOCH_NUM = 400
+NUM_DEMO_USED = 1000
+EPOCH_NUM = 500
 
 
 
@@ -47,7 +47,7 @@ trainers = []
 
 
 # YY: Load demonstrations and create environment
-with open('src/demonstrations/safe_demo_1.pkl', 'rb') as f:
+with open('src/demonstrations/safe_demo_correct.pkl', 'rb') as f:
     demonstrations = pickle.load(f)
 
 # YY: only retain agent's actions
@@ -78,10 +78,10 @@ with tf.Session(config=config) as sess:
                          state_only=True, fusion=False,
                          max_itrs=5,
                          name=f'skill_{index}')
-        for idx, var in enumerate(
-            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                              scope=f'skill_{index}')):
-            save_dictionary[f'my_skill_{index}_{idx}'] = var
+        # for idx, var in enumerate(
+        #     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+        #                       scope=f'skill_{index}')):
+        #     save_dictionary[f'my_skill_{index}_{idx}'] = var
 
         # policy = GaussianMLPPolicy(name=f'policy_{index}',
         #                            env_spec=env.spec,
@@ -99,6 +99,15 @@ with tf.Session(config=config) as sess:
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                               scope=f'action')):
             save_dictionary[f'action_{index}_{idx}'] = var
+
+
+        # Add reward params
+        for idx, var in enumerate(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              scope=f'skill_{index}/discrim/reward')):
+            print(var.name)
+            print(f'reward_{index}_{idx}')
+            save_dictionary[f'reward_{index}_{idx}'] = var
 
         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
@@ -122,8 +131,8 @@ with tf.Session(config=config) as sess:
         algos.append(algo)
 
 
-
-
+    print("============================")
+    print(save_dictionary)
 
     sess.run(tf.global_variables_initializer())
     # env_test = gym.make('InvertedPendulum-v2')

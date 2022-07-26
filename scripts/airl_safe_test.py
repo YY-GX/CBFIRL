@@ -24,12 +24,19 @@ from tensorflow.python.tools.inspect_checkpoint import print_tensors_in_checkpoi
 
 
 # YY: params
-NUM_DEMO_USED = 5
+NUM_DEMO_USED = 1000
 EPOCH_NUM = 1500
 
 now = datetime.now()
 # log_path = f"data/yy/01_07_2022_21_26_02"
-log_path = f"data/yy/08_07_2022_17_40_20_good"
+# log_path = f"data/yy/1000-14_07_2022_23_57_30"
+# log_path = f"data/saved_cbf_policies/18_07_2022_22_14_49"
+
+
+log_path = f"data/saved_cbf_policies/24_07_2022_23_29_23"  # r(s, a)
+log_path = f"data/saved_cbf_policies/25_07_2022_21_16_22"  # no reward loss added
+log_path = f"data/saved_cbf_policies/25_07_2022_21_59_46"  # r(T(s, \pi(s)))
+# log_path = f"data/yy/17_07_2022_16_52_03"
 
 
 
@@ -40,7 +47,7 @@ trainers = []
 
 
 # YY: Load demonstrations and create environment
-with open('src/demonstrations/safe_demo_1.pkl', 'rb') as f:
+with open('src/demonstrations/safe_demo_4.pkl', 'rb') as f:
     demonstrations = pickle.load(f)
 
 # YY: only retain agent's actions
@@ -60,24 +67,34 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     save_dictionary = {}
     for index in range(len(demonstrations)):
-        irl_model = AIRL(env=env, expert_trajs=demonstrations[index],
-                         state_only=True, fusion=False,
-                         max_itrs=10,
-                         name=f'skill_{index}')
-        for idx, var in enumerate(
-            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                              scope=f'skill_{index}')):
-            save_dictionary[f'my_skill_{index}_{idx}'] = var
+        # irl_model = AIRL(env=env, expert_trajs=demonstrations[index],
+        #                  state_only=True, fusion=False,
+        #                  max_itrs=10,
+        #                  name=f'skill_{index}')
+        # for idx, var in enumerate(
+        #     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+        #                       scope=f'skill_{index}')):
+        #     save_dictionary[f'my_skill_{index}_{idx}'] = var
 
-        policy = GaussianMLPPolicy(name=f'policy_{index}',
+        # policy = GaussianMLPPolicy(name=f'policy_{index}',
+        #                            env_spec=env.spec,
+        #                            hidden_sizes=(32, 32))
+        # for idx, var in enumerate(
+        #     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+        #                       scope=f'policy_{index}')):
+        #     save_dictionary[f'my_policy_{index}_{idx}'] = var
+
+        policy = GaussianMLPPolicy(name=f'action',
                                    env_spec=env.spec,
                                    hidden_sizes=(32, 32))
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                              scope=f'policy_{index}')):
-            save_dictionary[f'my_policy_{index}_{idx}'] = var
+                              scope=f'action')):
+            # print(var.name)
+            # print(f'action_{index}_{idx}')
+            save_dictionary[f'action_{index}_{idx}'] = var
 
-        irl_models.append(irl_model)
+        # irl_models.append(irl_model)
         policies.append(policy)
 
     # variables_names = [v.name for v in tf.trainable_variables()]
@@ -101,7 +118,7 @@ with tf.Session(config=config) as sess:
     ob = env_test.reset()
     succ_cnt, traj_cnt, coll_cnt, cnt = 0, 0, 0, 0
     EVAL_TRAJ_NUM = 100
-    MAX_TIMESTEP = 100
+    MAX_TIMESTEP = 50
 
     # # env_test.render()
     # while traj_cnt < EVAL_TRAJ_NUM:
