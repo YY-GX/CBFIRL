@@ -5,6 +5,8 @@ Results:
     AverageReturn: 100
     RiseTime: itr 13
 """
+import numpy as np
+
 from envs.carEnv import carEnv
 # from envs.carEnv_garage import carEnv
 import os
@@ -26,6 +28,27 @@ from garage.experiment import Snapshotter
 import pickle
 import dowel
 from dowel import logger, tabular
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fusion_num', type=int, required=False, default=500)
+    parser.add_argument('--gpu', type=str, default='0')
+    args = parser.parse_args()
+    return args
+
+
+
+
+
+
+
+
+
+
+args = parse_args()
+# os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+
 
 # YY: params
 NUM_DEMO_USED = 1000
@@ -75,9 +98,10 @@ with tf.Session(config=config) as sess:
         trainer = Trainer(snapshotter)
 
         irl_model = AIRL(env=env, expert_trajs=demonstrations[index],
-                         state_only=True, fusion=False,
+                         state_only=True, fusion=True,
                          max_itrs=5,
-                         name=f'skill_{index}')
+                         name=f'skill_{index}',
+                         fusion_num=args.fusion_num)
         # for idx, var in enumerate(
         #     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
         #                       scope=f'skill_{index}')):
@@ -174,7 +198,7 @@ with tf.Session(config=config) as sess:
         done = False
         ob = env_test.reset()
         succ_cnt, traj_cnt, coll_cnt, cnt = 0, 0, 0, 0
-        EVAL_TRAJ_NUM = 10
+        EVAL_TRAJ_NUM = 100
         MAX_TIMESTEP = 1000
 
 
@@ -228,6 +252,7 @@ with tf.Session(config=config) as sess:
         print(">> Success traj num: ", succ_cnt, ", Collision traj num: ", coll_cnt, " out of ", EVAL_TRAJ_NUM,
               " trajs.")
         print(coll_ls)
+        print(np.mean(coll_ls), np.std(coll_ls))
         print(succ_ls)
 
         # for timestep in range(1000):

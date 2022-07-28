@@ -36,6 +36,8 @@ now = datetime.now()
 log_path = f"data/saved_cbf_policies/24_07_2022_23_29_23"  # r(s, a)
 log_path = f"data/saved_cbf_policies/25_07_2022_21_16_22"  # no reward loss added
 log_path = f"data/saved_cbf_policies/25_07_2022_21_59_46"  # r(T(s, \pi(s)))
+log_path = f"data/saved_cbf_policies/27_07_2022_21_12_22"
+
 # log_path = f"data/yy/17_07_2022_16_52_03"
 
 
@@ -167,6 +169,7 @@ with tf.Session(config=config) as sess:
     print(">> Success traj num: ", succ_cnt, ", Collision traj num: ", coll_cnt, " out of ", EVAL_TRAJ_NUM,
           " trajs.")
     print(coll_ls)
+    print(np.mean(coll_ls), np.std(coll_ls))
     print(succ_ls)
 
     save_video(imgs, os.path.join(f"{log_path}/policy_videos/skill_0_eval.avi"))

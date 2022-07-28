@@ -206,6 +206,7 @@ def main():
     log_path = f"data/yy/22_07_2022_16_38_54"
     log_path = f"data/yy/22_07_2022_17_00_38"  # r(s, a)
     log_path = f"data/yy/25_07_2022_18_57_41"  # r(s)
+    log_path = f"data/yy/27_07_2022_17_41_55"  # r(s)
 
 
 
