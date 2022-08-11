@@ -31,13 +31,18 @@ from dowel import logger, tabular
 import argparse
 
 import envs.config as config_file
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    now = datetime.now()
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
     parser.add_argument('--epoch_num', type=int, required=False, default=400)
     parser.add_argument('--eval_num', type=int, required=False, default=10)
+    parser.add_argument('--share_pth', type=str, default=None)
+    parser.add_argument('--airl_pth', type=str, default=None)
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
     parser.add_argument('--gpu', type=str, default='0')
     args = parser.parse_args()
@@ -64,6 +69,9 @@ os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)
 config.gpu_options.allow_growth = True
 
+# log_path = args.log_pth
+share_path = args.share_pth
+airl_path = args.airl_pth
 
 
 
@@ -76,8 +84,6 @@ EVAL_TRAJ_NUM = args.eval_num
 demo_pth = args.demo_pth
 
 
-now = datetime.now()
-log_path = f"data/obs16/{now.strftime('%d_%m_%Y_%H_%M_%S')}"
 
 irl_models = []
 policies = []
@@ -106,34 +112,49 @@ demonstrations = [demonstrations[:NUM_DEMO_USED]]
 # config = tf.ConfigProto()
 # config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
-    save_dictionary = {}
+    save_dictionary_share = {}
+    save_dictionary_airl = {}
     for index in range(len(demonstrations)):
-        snapshotter = Snapshotter(f'{log_path}/skill_{index}')
+        snapshotter = Snapshotter(f'{share_path}/skill_{index}')
         trainer = Trainer(snapshotter)
 
+        # AIRL
         irl_model = AIRL(env=env, expert_trajs=demonstrations[index],
-                         state_only=False, fusion=True,
+                         state_only=True, fusion=True,
                          max_itrs=10,
                          name=f'skill_{index}',
                          fusion_num=args.fusion_num)
 
+
+        # policy
         policy = GaussianMLPPolicy(name=f'action',
                                    env_spec=env.spec,
                                    hidden_sizes=(32, 32))
+
+        # Add airl params
+        for idx, var in enumerate(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              scope=f'skill_{index}')):
+            save_dictionary_airl[f'my_skill_{index}_{idx}'] = var
 
         # Add policy params
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                               scope=f'action')):
-            save_dictionary[f'action_{index}_{idx}'] = var
+            save_dictionary_share[f'action_{index}_{idx}'] = var
+            save_dictionary_airl[f'action_{index}_{idx}'] = var
 
         # Add reward params
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                               scope=f'skill_{index}/discrim/reward')):
-            print(var.name)
-            print(f'reward_{index}_{idx}')
-            save_dictionary[f'reward_{index}_{idx}'] = var
+
+            save_dictionary_share[f'reward_{index}_{idx}'] = var
+
+        # restore policy and airl
+        if os.path.exists(airl_path):
+            saver = tf.train.Saver(save_dictionary_airl)
+            saver.restore(sess, f"{airl_path}/model")
 
         baseline = LinearFeatureBaseline(env_spec=env.spec)
 
@@ -156,7 +177,7 @@ with tf.Session(config=config) as sess:
         algos.append(algo)
 
     sess.run(tf.global_variables_initializer())
-    env_test = carEnv(demo=demo_pth)  # YY
+
     for i in range(len(demonstrations)):
         # Training
         trainer = trainers[i]
@@ -169,55 +190,16 @@ with tf.Session(config=config) as sess:
 
         logger.remove_all()
         logger.add_output(dowel.StdOutput())
-        logger.add_output(dowel.TensorBoardOutput(f"{log_path}/policy_logs/"))
+        logger.add_output(dowel.TensorBoardOutput(f"{share_path}/policy_logs/"))
         logger.log('Starting up...')
 
         trainer.setup(algos[i], env)
         trainer.train(n_epochs=EPOCH_NUM, batch_size=10000)
 
-        saver = tf.train.Saver(save_dictionary)
-        saver.save(sess, f"{log_path}/model")
+        # save model
+        saver_share = tf.train.Saver(save_dictionary_share)
+        saver_share.save(sess, f"{share_path}/model")
 
-
-        # Evaluation
-        policy = policies[i]
-
-        imgs = []
-
-        done = False
-        ob = env_test.reset()
-        env_test.render('no_vis')
-        succ_cnt, traj_cnt, coll_cnt, cnt = 0, 0, 0, 0
-
-        coll_ls, succ_ls = [], []
-        while traj_cnt < EVAL_TRAJ_NUM:
-            if not done:
-                ob, rew, done, info = env_test.step(policy.get_action(ob)[0])
-                imgs.append(env_test.render('rgb_array'))
-            else:
-                print(">> Eval traj num: ", traj_cnt)
-                traj_cnt += 1
-                coll_ls.append(info['collision_num'])
-                coll_cnt = coll_cnt + info['collision_num']
-                succ_cnt = succ_cnt + info['success']
-                ob = env_test.reset()
-                done = False
-
-        print(">> Success traj num: ", succ_cnt, ", Collision traj num: ", coll_cnt, " out of ", EVAL_TRAJ_NUM,
-              " trajs.")
-        print(coll_ls)
-        print(np.mean(coll_ls), np.std(coll_ls))
-        print(succ_ls)
-
-        with open(log_path + "/eval_results.txt", 'w', encoding='utf-8') as f:
-            f.write(
-                ">> Success traj num: " + str(succ_cnt) + ", Collision traj num: " + str(coll_cnt) + " out of " + str(
-                    EVAL_TRAJ_NUM) + " trajs.\n")
-            f.write(str(np.mean(coll_ls)) + ', ' + str(np.std(coll_ls)))
-
-        save_video(imgs, os.path.join(f"{log_path}/policy_videos/skill_{i}.avi"))
-    env_test.close()
-
-    # saver = tf.train.Saver(save_dictionary)
-    # saver.save(sess, f"{log_path}/model")
+        saver_airl = tf.train.Saver(save_dictionary_airl)
+        saver_airl.save(sess, f"{airl_path}/model")
 

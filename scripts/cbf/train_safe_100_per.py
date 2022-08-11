@@ -27,6 +27,10 @@ np.set_printoptions(4)
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_agents', type=int, required=True)
+    parser.add_argument('--goal_reaching_weight', type=float, required=False, default=0.1)
+    parser.add_argument('--training_epoch', type=int, required=False, default=20000)
+    parser.add_argument('--demo_path', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
+    parser.add_argument('--policy_path', type=str, default='data/obs16/04_08_2022_17_23_23')
     parser.add_argument('--model_path', type=str, default=None)
     parser.add_argument('--save_path', type=str, default=None)
     parser.add_argument('--gpu', type=str, default='0')
@@ -41,7 +45,6 @@ def build_optimizer(loss):
     # variables_names = [v.name for v in tf.trainable_variables()]
     # for k in variables_names:
     #     print("Variable: ", k)
-
 
     # tensor to accumulate gradients over multiple steps
     accumulators = [
@@ -78,9 +81,6 @@ def build_optimizer(loss):
             raise ValueError
 
 
-    print('---------------------')
-
-
     train_step_h = optimizer.apply_gradients(gradient_vars_h)
     train_step_a = optimizer.apply_gradients(gradient_vars_a)
     # re-initialize the accmulation tensor and accumulation step to zero
@@ -102,9 +102,7 @@ def get_action_graph(num_agents, ob, policy):
     return tf.reshape(samples, [1, 2])
 
 
-
-
-def build_training_graph(num_agents, env, policy):
+def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
     # policy = GaussianMLPPolicy(name='action',
     #                            env_spec=env.spec,
     #                            hidden_sizes=(32, 32))
@@ -117,10 +115,13 @@ def build_training_graph(num_agents, env, policy):
     g = tf.placeholder(tf.float32, [num_agents, 2], name='ph_goal')
     # observation
     # ob = tf.placeholder(tf.float32, [(min(num_agents, config.TOP_K + 1)) * 4, ])
-    obv = tf.placeholder(tf.float32, shape=(1, num_agents * 4), name='ph_obv')
-    obv_next = tf.placeholder(tf.float32, shape=(1, num_agents * 4), name='ph_obv_next')
+    obv = tf.placeholder(tf.float32, shape=(1, min(config.TOP_K + 1, num_agents) * 4), name='ph_obv')
+    obv_next = tf.placeholder(tf.float32, shape=(1, min(config.TOP_K + 1, num_agents) * 4), name='ph_obv_next')
     # ob = tf.placeholder(tf.float32)
-    other_as = tf.placeholder(tf.float32, [min(num_agents - 1, config.TOP_K), 2], name='ph_other_as')
+    # other_as = tf.placeholder(tf.float32, [min(num_agents - 1, config.TOP_K), 2], name='ph_other_as')
+    other_as = tf.placeholder(tf.float32, [num_agents - 1, 2], name='ph_other_as')
+    # Indicator to indicate the safe and unsafe
+    indicator = tf.placeholder(tf.float32)
 
 
     # x is difference between the state of each agent and other agents
@@ -148,20 +149,20 @@ def build_training_graph(num_agents, env, policy):
     # loss safe is for h(s) >=0, s in safe set
     # acc_dang is the accuracy that h(s) < 0, s in dangerous set is satisfied
     # acc_safe is the accuracy that h(s) >=0, s in safe set is satisfied
-    (loss_dang, loss_safe, acc_dang, acc_safe) = core.loss_barrier(
-        h=h, s=s, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION, indices=indices)
+    (loss_dang, loss_safe, acc_dang, acc_safe) = core.loss_barrier_flex(
+        h=h, s=s, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION, indicator=indicator, indices=indices)
     # loss_dang_deriv is for doth(s) + alpha h(s) >=0 for s in dangerous set
     # loss_safe_deriv is for doth(s) + alpha h(s) >=0 for s in safe set
     # loss_medium_deriv is for doth(s) + alpha h(s) >=0 for s not in the dangerous
     # or the safe set
     (loss_dang_deriv, loss_safe_deriv, acc_dang_deriv, acc_safe_deriv
-        ) = core.loss_derivatives(s=s, a=a, h=h, x=x, r=config.DIST_MIN_THRES, 
-        indices=indices, ttc=config.TIME_TO_COLLISION, alpha=config.ALPHA_CBF)
+        ) = core.loss_derivatives_flex(s=s, a=a, h=h, x=x, r=config.DIST_MIN_THRES,
+        indices=indices, ttc=config.TIME_TO_COLLISION, indicator=indicator, alpha=config.ALPHA_CBF)
 
     # TODO: delete this one
     # the distance between the a and the nominal a  YY: this is the goal reaching loss
-    loss_action = core.loss_actions(
-        s=s, g=g, a=a, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION)
+    # loss_action = core.loss_actions(
+    #     s=s, g=g, a=a, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION)
 
 
     # # TODO: Add reward loss [r(s, a)]
@@ -179,15 +180,91 @@ def build_training_graph(num_agents, env, policy):
         loss_reward = tf.reduce_sum(-relu_net(rew_input))
 
 
-    loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv, 0.1 * loss_reward]  # YY: 0.01 original for loss_action
-    # loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv]  # YY: 0.01 original for loss_action
+
+    # goal_reaching_weight = 0
+    loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv, goal_reaching_weight * loss_reward]  # YY: 0.01 original for loss_action
     acc_list = [acc_dang, acc_safe, acc_dang_deriv, acc_safe_deriv]
+
+    loss_safety, loss_goal_reaching = tf.math.add_n([2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv]), loss_reward
 
     weight_loss = [
         config.WEIGHT_DECAY * tf.nn.l2_loss(v) for v in tf.trainable_variables()]
     loss = 10 * tf.math.add_n(loss_list + weight_loss)
 
-    return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, obv_next
+    return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching
+
+
+# def build_training_graph(num_agents, env, policy, goal_reaching_weight):
+#     # s is the state vectors of the agents, si = [xi, yi, vx_i, vy_i]
+#     s = tf.placeholder(tf.float32, [num_agents, 4], name='ph_state')
+#     # g is the goal states
+#     g = tf.placeholder(tf.float32, [num_agents, 2], name='ph_goal')
+#     # observation
+#     # ob = tf.placeholder(tf.float32, [(min(num_agents, config.TOP_K + 1)) * 4, ])
+#     obv = tf.placeholder(tf.float32, shape=(1, num_agents * 4), name='ph_obv')
+#     obv_next = tf.placeholder(tf.float32, shape=(1, num_agents * 4), name='ph_obv_next')
+#     # ob = tf.placeholder(tf.float32)
+#     other_as = tf.placeholder(tf.float32, [min(num_agents - 1, config.TOP_K), 2], name='ph_other_as')
+#
+#
+#     # x is difference between the state of each agent and other agents
+#     x = tf.expand_dims(s, 1) - tf.expand_dims(s, 0)  # YY: shape: [num_agents, num_agents, 4]
+#
+#     # h is the CBF value of shape [num_agents, TOP_K, 1], where TOP_K represents
+#     # the K nearest agents
+#     h, mask, indices = core.network_cbf(x=x, r=config.DIST_MIN_THRES, indices=None)
+#     # a is the control action of each agent, with shape [num_agents, 2]
+#     # a = core.network_action(s=s, g=g, obs_radius=config.OBS_RADIUS, indices=indices)  #  YY: this is what we need to replace
+#
+#     a_agent = get_action_graph(num_agents, obv, policy)
+#     a = tf.concat([other_as, a_agent], 0)
+#
+#
+#     # compute the value of loss functions and the accuracies
+#     # loss_dang is for h(s) < 0, s in dangerous set
+#     # loss safe is for h(s) >=0, s in safe set
+#     # acc_dang is the accuracy that h(s) < 0, s in dangerous set is satisfied
+#     # acc_safe is the accuracy that h(s) >=0, s in safe set is satisfied
+#     (loss_dang, loss_safe, acc_dang, acc_safe) = core.loss_barrier(
+#         h=h, s=s, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION, indices=indices)
+#     # loss_dang_deriv is for doth(s) + alpha h(s) >=0 for s in dangerous set
+#     # loss_safe_deriv is for doth(s) + alpha h(s) >=0 for s in safe set
+#     # loss_medium_deriv is for doth(s) + alpha h(s) >=0 for s not in the dangerous
+#     # or the safe set
+#     (loss_dang_deriv, loss_safe_deriv, acc_dang_deriv, acc_safe_deriv
+#         ) = core.loss_derivatives(s=s, a=a, h=h, x=x, r=config.DIST_MIN_THRES,
+#         indices=indices, ttc=config.TIME_TO_COLLISION, alpha=config.ALPHA_CBF)
+#
+#     # TODO: delete this one
+#     # the distance between the a and the nominal a  YY: this is the goal reaching loss
+#     loss_action = core.loss_actions(
+#         s=s, g=g, a=a, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION)
+#
+#
+#     # # TODO: Add reward loss [r(s, a)]
+#     # a_reward_input = tf.reshape(a[-1, :], [1, 2])
+#     # rew_input = tf.concat([obv, a_reward_input], axis=1)
+#     # with tf.variable_scope('reward'):
+#     #     loss_reward = tf.reduce_sum(-relu_net(rew_input))
+#
+#
+#     # TODO: Add reward loss [r(T(s, pi(s)))]
+#     dsdt = tf.concat([tf.reshape(s[-1, 2:], (1, 2)), tf.reshape(a[-1, :], (1, 2))], axis=1)  # YY: dsdt = [vx, vy, ax, ay]
+#     agent_state = tf.reshape((s[-1, :] + dsdt * config.TIME_STEP), (1, 4))
+#     rew_input = tf.concat([obv_next[:, :-4], agent_state], axis=1)
+#     with tf.variable_scope('reward'):
+#         loss_reward = tf.reduce_sum(-relu_net(rew_input))
+#
+#
+#     loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv, goal_reaching_weight * loss_reward]  # YY: 0.01 original for loss_action
+#     # loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv]  # YY: 0.01 original for loss_action
+#     acc_list = [acc_dang, acc_safe, acc_dang_deriv, acc_safe_deriv]
+#
+#     weight_loss = [
+#         config.WEIGHT_DECAY * tf.nn.l2_loss(v) for v in tf.trainable_variables()]
+#     loss = 10 * tf.math.add_n(loss_list + weight_loss)
+#
+#     return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, obv_next, loss_reward
 
 
 def count_accuracy(accuracy_lists):
@@ -199,7 +276,14 @@ def count_accuracy(accuracy_lists):
 
 
 def main():
+    # Params
     args = parse_args()
+    goal_reaching_weight = args.goal_reaching_weight
+    TRAIN_STEP = args.training_epoch
+    demo_path = args.demo_path
+    policy_path = args.policy_path
+
+
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     log_path = f"data/yy/17_07_2022_16_52_03"
@@ -207,14 +291,14 @@ def main():
     log_path = f"data/yy/22_07_2022_17_00_38"  # r(s, a)
     log_path = f"data/yy/25_07_2022_18_57_41"  # r(s)
     log_path = f"data/yy/27_07_2022_17_41_55"  # r(s)
-
+    log_path = policy_path
 
 
 
     now = datetime.now()
     save_path = f"data/saved_cbf_policies/{now.strftime('%d_%m_%Y_%H_%M_%S')}"
 
-    writer = SummaryWriter(log_path)
+    writer = SummaryWriter(save_path)
 
     env_graph = GymEnv(carEnv(), max_episode_length=50)
     env = carEnv()
@@ -231,7 +315,11 @@ def main():
                                    env_spec=env_graph.spec,
                                    hidden_sizes=(32, 32))
 
-        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, obv_next = build_training_graph(args.num_agents, env, policy)
+        # s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, obv_next, loss_reward = build_training_graph(args.num_agents, env, policy, goal_reaching_weight)
+        # zero_ops, accumulate_ops, train_step_h, train_step_a = build_optimizer(loss)
+
+        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching =\
+            build_training_graph(args.num_agents, env_graph, policy, goal_reaching_weight)
         zero_ops, accumulate_ops, train_step_h, train_step_a = build_optimizer(loss)
 
         accumulate_ops.append(loss_list)
@@ -251,11 +339,6 @@ def main():
                 break
             save_dictionary[f'action_0_{idx}'] = var
 
-        # for idx, var in enumerate(
-        #     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-        #                       scope=f'skill_0/discrim/reward')):
-        #     print(var.name)
-        #     save_dictionary[f'reward_0_{idx}'] = var
 
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -267,20 +350,6 @@ def main():
         saver = tf.train.Saver(save_dictionary)
         saver.restore(sess, f"{log_path}/model")
 
-
-
-
-
-
-        # saver = tf.train.Saver()
-        #
-        # if args.model_path:
-        #     saver.restore(sess, args.model_path)
-
-
-
-
-
         state_gain = np.eye(2, 4) + np.eye(2, 4, k=2) * np.sqrt(3)
 
         loss_lists_np = []
@@ -291,11 +360,11 @@ def main():
         safety_ratios_epoch = []
         safety_ratios_epoch_lqr = []
         
-        for istep in range(config.TRAIN_STEPS):
+        for istep in range(TRAIN_STEP):
             ob = env.reset()
             traj_id = env.get_traj_id()
             # read demonstrations
-            with open('src/demonstrations/safe_demo_4.pkl', 'rb') as f:
+            with open(demo_path, 'rb') as f:
                 demonstrations = pickle.load(f)
 
             all_actions = demonstrations[traj_id]['actions']
@@ -308,6 +377,7 @@ def main():
             init_dist_errors_np.append(np.mean(np.linalg.norm(s_np[:, :2] - g_np, axis=1)))
             sess.run(zero_ops)
 
+            demo_loss_ls, loss_reward_ls = [], []
             # run the system with the safe controller
             for i in range(len(all_actions)):
 
@@ -327,8 +397,7 @@ def main():
 
                 # computes the control input a_np using the safe controller
 
-                a_np = sess.run([a],
-                                     feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a})
+                a_np = sess.run([a], feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a})
 
                 # a_np, out = sess.run([a, accumulate_ops], feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a})
 
@@ -341,9 +410,11 @@ def main():
                 # ob_next, rew, done, info = env.step(a_np[-1, :])
                 s_np = ob.reshape([-1, 4])
 
-                out = sess.run([accumulate_ops],
-                                     feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a, obv_next: ob_next.reshape([1, 36])})[0]
-
+                out, loss_reward_s, loss_s = sess.run([accumulate_ops, loss_reward, loss],
+                                     feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a, obv_next: ob_next.reshape([1, 36])})
+                out = out[0]
+                demo_loss_ls.append(loss_s)
+                loss_reward_ls.append(loss_reward_s)
                 ob = ob_next
 
                 # # simulate the system for one step
@@ -363,22 +434,6 @@ def main():
                     ) < config.DIST_MIN_CHECK:
                     break
 
-            # # run the system with the LQR controller without collision avoidance as the baseline
-            # for i in range(accumulation_steps):
-            #     state_gain = np.eye(2, 4) + np.eye(2, 4, k=2) * np.sqrt(3)
-            #     s_ref_lqr = np.concatenate([s_np_lqr[:, :2] - g_np_lqr, s_np_lqr[:, 2:]], axis=1)
-            #     a_lqr = -s_ref_lqr.dot(state_gain.T)
-            #     s_np_lqr = s_np_lqr + np.concatenate([s_np_lqr[:, 2:], a_lqr], axis=1) * config.TIME_STEP
-            #     s_np_lqr[:, :2] = np.clip(s_np_lqr[:, :2], 0, 1)
-            #     safety_ratio_lqr = 1 - np.mean(core.ttc_dangerous_mask_np(
-            #         s_np_lqr, config.DIST_MIN_CHECK, config.TIME_TO_COLLISION_CHECK), axis=1)
-            #     safety_ratio = np.mean(safety_ratio == 1)
-            #     safety_ratios_epoch_lqr.append(safety_ratio_lqr)
-            #
-            #     if np.mean(
-            #         np.linalg.norm(s_np_lqr[:, :2] - g_np_lqr, axis=1)
-            #         ) < config.DIST_MIN_CHECK:
-            #         break
 
             dist_errors_np.append(np.mean(np.linalg.norm(s_np[:, :2] - g_np, axis=1)))
 
@@ -396,15 +451,15 @@ def main():
 
 
             if np.mod(istep, config.DISPLAY_STEPS) == 0:
-                print('Step: {}, Loss: {}, Accuracy: {}'.format(
-                    istep, np.mean(loss_lists_np, axis=0), 
-                    np.array(count_accuracy(acc_lists_np))))
+                # print('Step: {}, Loss: {}, Accuracy: {}'.format(
+                #     istep, np.mean(loss_lists_np, axis=0),
+                #     np.array(count_accuracy(acc_lists_np))))
+                print('Step: {}'.format(istep))
                 loss_lists_np, acc_lists_np, dist_errors_np, safety_ratios_epoch, safety_ratios_epoch_lqr = [], [], [], [], []
 
 
-            # writer.add_scalar('Loss', np.mean(loss_lists_np, axis=0), istep)
-            #
-            # writer.add_scalar('safety_ratio', np.mean(safety_ratios_epoch, axis=0), istep)
+            writer.add_scalar('Loss_objective', np.mean(demo_loss_ls), istep)
+            writer.add_scalar('Loss_reward', np.sum(loss_reward_ls), istep)
 
 
 
@@ -417,6 +472,9 @@ def main():
 
         # Save model
         saver.save(sess, f"{save_path}/model")
+
+
+    os.system('python scripts/airl_safe_test.py --policy_path ' + str(save_path))
 
 if __name__ == '__main__':
     main()

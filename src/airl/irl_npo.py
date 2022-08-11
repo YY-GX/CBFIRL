@@ -229,6 +229,7 @@ class NPO(RLAlgorithm):
         # -- Stage: Calculate and pad baselines
         paths = episodes.to_list()
         paths = self.compute_irl(paths, itr)
+        # TODO: insert training cbf here
         episodes = episodes.from_list(self._env_spec, paths)
 
         if self.center_grads:

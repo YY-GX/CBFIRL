@@ -30,10 +30,11 @@ def parse_args():
     parser.add_argument('--goal_reaching_weight', type=float, required=False, default=0.1)
     parser.add_argument('--num_agents', type=int, required=True)
     parser.add_argument('--model_path', type=str, default=None)
-    parser.add_argument('--save_path', type=str, default=f"data/saved_cbf_policies_flex/{now.strftime('%d_%m_%Y_%H_%M_%S')}")
+    parser.add_argument('--share_path', type=str, default=None)
+    parser.add_argument('--cbf_path', type=str, default=None)
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
-    parser.add_argument('--log_path', type=str, default='data/obs16/04_08_2022_17_23_23')
     parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('--num', type=int, default=0)
     args = parser.parse_args()
     return args
 
@@ -184,7 +185,7 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
 
 
 
-    # goal_reaching_weight = 0
+    goal_reaching_weight = 0
     loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv, goal_reaching_weight * loss_reward]  # YY: 0.01 original for loss_action
     acc_list = [acc_dang, acc_safe, acc_dang_deriv, acc_safe_deriv]
 
@@ -243,7 +244,7 @@ def demo_remove_top_k(demos, topk):
 def state_remove_top_k(state, topk):
     # print(np.sum(np.square((state[:-1, :] - state[-1, :])[:, :2]), axis=1))
     topk_mask = np.argsort(np.sum(np.square((state[:-1, :] - state[-1, :])[:, :2]), axis=1))[:topk]
-    return np.concatenate([state[:-1, :][topk_mask, :], state[-1, :][Non-e, :]], axis=0)
+    return np.concatenate([state[:-1, :][topk_mask, :], state[-1, :][None, :]], axis=0)
 
     # for i, demo in enumerate(demos):
     #     obvs = demo['observations']
@@ -258,32 +259,14 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     demo_pth = args.demo_pth
 
-    # log_path = f"data/yy/yy_500_15_07_2022_17_21_00"
-    log_path = 'data/yy/28_07_2022_13_27_02'
-    log_path = 'data/yy/22_07_2022_17_00_38'
-    log_path = 'data/airl_safe_fusion_num_finetune/02_08_2022_16_16_59'  # r(s)
-    # log_path = 'data/flex_initial_policy_r_s_a/02_08_2022_17_17_31'  # r(s, a)
-
-
-
-
-    log_path = 'data/obs16/03_08_2022_16_26_14'  # r(s) 1000 epoch
-
-    log_path = args.log_path
-
-    # now = datetime.now()
-    # save_path = f"data/saved_cbf_policies_flex/{now.strftime('%d_%m_%Y_%H_%M_%S')}"
-    save_path = args.save_path
+    share_path = args.share_path
+    cbf_path = args.cbf_path
 
     env_graph = GymEnv(carEnv(demo=demo_pth), max_episode_length=50)
     env = carEnv(demo=demo_pth)
     goal_reaching_weight = args.goal_reaching_weight
 
-
-
-    accumulation_steps = config.INNER_LOOPS
-
-    writer = SummaryWriter(save_path)
+    writer = SummaryWriter(share_path)
 
 
 
@@ -300,12 +283,9 @@ def main():
         accumulate_ops.append(loss_list)
         accumulate_ops.append(acc_list)
 
-        # all_other_vars = [v for v in tf.global_variables() if 'action' not in v.name]
-        # sess.run(tf.variables_initializer(var_list=all_other_vars))
         sess.run(tf.global_variables_initializer())
 
-        # TODO: restore policy params
-
+        # Restore policy and reward params
         save_dictionary = {}
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -317,24 +297,23 @@ def main():
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                               scope=f'reward')):
-            print(var.name)
             save_dictionary[f'reward_0_{idx}'] = var
 
-
-
-
         saver = tf.train.Saver(save_dictionary)
-        saver.restore(sess, f"{log_path}/model")
+        saver.restore(sess, f"{share_path}/model")
 
 
 
+        # Restore cbf params
+        save_dictionary_cbf = {}
+        for idx, var in enumerate(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              scope=f'cbf')):
+            save_dictionary_cbf[f'cbf_{idx}'] = var
+        saver_cbf = tf.train.Saver(save_dictionary_cbf)
+        if os.path.exists(cbf_path):
+            saver_cbf.restore(sess, f"{cbf_path}/model")
 
-
-
-        # saver = tf.train.Saver()
-        #
-        # if args.model_path:
-        #     saver.restore(sess, args.model_path)
 
 
 
@@ -395,6 +374,8 @@ def main():
         '''
         print("Total training steps: ", TRAIN_STEPS)
         for istep in range(TRAIN_STEPS):
+            # if istep > 11:
+            #     break
             print('Step: ', istep)
             '''
             Each iteration's amount of safe and unsafe states
@@ -478,14 +459,13 @@ def main():
             print('loss_safety_ls_unsafe: ', loss_safety_ls_unsafe)
             print('loss_goal_reaching_ls_unsafe: ', loss_goal_reaching_ls_unsafe)
 
-            writer.add_scalar('loss_safety_ls_safe', loss_safety_ls_safe, istep)
-            writer.add_scalar('loss_goal_reaching_ls_safe', loss_goal_reaching_ls_safe, istep)
-            writer.add_scalar('loss_safety_ls_unsafe', loss_safety_ls_unsafe, istep)
-            writer.add_scalar('loss_goal_reaching_ls_unsafe', loss_goal_reaching_ls_unsafe, istep)
+            writer.add_scalar(str(args.num) + '_loss_safety_ls_safe', loss_safety_ls_safe, istep)
+            writer.add_scalar(str(args.num) + '_loss_goal_reaching_ls_safe', loss_goal_reaching_ls_safe, istep)
+            writer.add_scalar(str(args.num) + '_loss_safety_ls_unsafe', loss_safety_ls_unsafe, istep)
+            writer.add_scalar(str(args.num) + '_loss_goal_reaching_ls_unsafe', loss_goal_reaching_ls_unsafe, istep)
 
-        saver.save(sess, f"{save_path}/model")
-
-    os.system('python scripts/airl_safe_test.py --policy_path ' + str(save_path))
+        saver.save(sess, f"{share_path}/model")
+        saver_cbf.save(sess, f"{cbf_path}/model")
 
 if __name__ == '__main__':
     main()

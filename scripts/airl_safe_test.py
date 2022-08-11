@@ -21,26 +21,37 @@ from global_utils.utils import *
 from garage.experiment import Snapshotter
 import pickle
 from tensorflow.python.tools.inspect_checkpoint import print_tensors_in_checkpoint_file
+import argparse
 
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    # parser.add_argument('--fusion_num', type=int, required=False, default=500)
+    # parser.add_argument('--demo_num', type=int, required=False, default=1000)
+    # parser.add_argument('--epoch_num', type=int, required=False, default=500)
+    # parser.add_argument('--eval_num', type=int, required=False, default=100)
+    # parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('--demo_path', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
+    parser.add_argument('--policy_path', type=str, default='data/combine_1_2/v1/share')
+    args = parser.parse_args()
+    return args
+
+args = parse_args()
 
 # YY: params
 NUM_DEMO_USED = 1000
 EPOCH_NUM = 1500
+EVAL_TRAJ_NUM = 100
 
 now = datetime.now()
-# log_path = f"data/yy/01_07_2022_21_26_02"
-# log_path = f"data/yy/1000-14_07_2022_23_57_30"
-# log_path = f"data/saved_cbf_policies/18_07_2022_22_14_49"
-
 
 log_path = f"data/saved_cbf_policies/24_07_2022_23_29_23"  # r(s, a)
 log_path = f"data/saved_cbf_policies/25_07_2022_21_16_22"  # no reward loss added
 log_path = f"data/saved_cbf_policies/25_07_2022_21_59_46"  # r(T(s, \pi(s)))
-log_path = f"data/saved_cbf_policies/27_07_2022_21_12_22"
-
-# log_path = f"data/yy/17_07_2022_16_52_03"
+log_path = f"data/saved_cbf_policies/28_07_2022_16_59_37"
 
 
+log_path = args.policy_path
 
 irl_models = []
 policies = []
@@ -48,8 +59,11 @@ algos = []
 trainers = []
 
 
+demo_pth = args.demo_path
+
+
 # YY: Load demonstrations and create environment
-with open('src/demonstrations/safe_demo_4.pkl', 'rb') as f:
+with open(demo_pth, 'rb') as f:
     demonstrations = pickle.load(f)
 
 # YY: only retain agent's actions
@@ -58,7 +72,7 @@ for traj in demonstrations:
         traj['actions'][i] = a[-1, :]
     for i, o in enumerate(traj['observations']):
         traj['observations'][i] = traj['observations'][i].flatten()
-env = GymEnv(carEnv(), max_episode_length=1000)
+env = GymEnv(carEnv(demo=demo_pth), max_episode_length=1000)
 
 demonstrations = [demonstrations[:NUM_DEMO_USED]]
 
@@ -69,94 +83,36 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     save_dictionary = {}
     for index in range(len(demonstrations)):
-        # irl_model = AIRL(env=env, expert_trajs=demonstrations[index],
-        #                  state_only=True, fusion=False,
-        #                  max_itrs=10,
-        #                  name=f'skill_{index}')
-        # for idx, var in enumerate(
-        #     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-        #                       scope=f'skill_{index}')):
-        #     save_dictionary[f'my_skill_{index}_{idx}'] = var
-
-        # policy = GaussianMLPPolicy(name=f'policy_{index}',
-        #                            env_spec=env.spec,
-        #                            hidden_sizes=(32, 32))
-        # for idx, var in enumerate(
-        #     tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-        #                       scope=f'policy_{index}')):
-        #     save_dictionary[f'my_policy_{index}_{idx}'] = var
-
         policy = GaussianMLPPolicy(name=f'action',
                                    env_spec=env.spec,
                                    hidden_sizes=(32, 32))
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                               scope=f'action')):
-            # print(var.name)
-            # print(f'action_{index}_{idx}')
             save_dictionary[f'action_{index}_{idx}'] = var
 
-        # irl_models.append(irl_model)
         policies.append(policy)
 
-    # variables_names = [v.name for v in tf.trainable_variables()]
-    # for k in variables_names:
-    #     print("Variable: ", k)
-    # print(save_dictionary.keys())
-
-    # sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver(save_dictionary)
     saver.restore(sess, f"{log_path}/model")
 
-
-
-
     # Evaluation
-    env_test = carEnv()  # YY
+    env_test = carEnv(demo=demo_pth)  # YY
+    env_test.render('no_vis')
 
     imgs = []
 
     done = False
     ob = env_test.reset()
     succ_cnt, traj_cnt, coll_cnt, cnt = 0, 0, 0, 0
-    EVAL_TRAJ_NUM = 100
-    MAX_TIMESTEP = 50
-
-    # # env_test.render()
-    # while traj_cnt < EVAL_TRAJ_NUM:
-    #     if not done:
-    #         timestep_reach_flag = False
-    #         if cnt > MAX_TIMESTEP:
-    #             done = True
-    #             info['success'] = False
-    #             cnt = 0
-    #             print(">> Reach {0} timestep".format(MAX_TIMESTEP))
-    #             timestep_reach_flag = True
-    #             continue
-    #         if cnt % 200 == 0:
-    #             print(">> cnt: ", cnt)
-    #         ob, rew, done, info = env_test.step(policy.get_action(ob)[0])
-    #         imgs.append(env_test.render('rgb_array'))
-    #         cnt += 1
-    #     else:
-    #         print(">> Eval traj num: ", traj_cnt)
-    #         print(">> succ_cnt: ", succ_cnt)
-    #         traj_cnt += 1
-    #         succ_cnt = succ_cnt + 1 if info['success'] else succ_cnt
-    #         if not info['success'] and not timestep_reach_flag:
-    #             coll_cnt += 1
-    #         print(">> coll_cnt: ", coll_cnt)
-    #         ob = env_test.reset()
-    #         done = False
-    #         cnt = 0
-    #
-    # print(">> Success traj num: ", succ_cnt, ", Collision traj num: ", coll_cnt, " out of ", EVAL_TRAJ_NUM, " trajs.")
+    video_traj_num = 10
 
     coll_ls, succ_ls = [], []
     while traj_cnt < EVAL_TRAJ_NUM:
         if not done:
             ob, rew, done, info = env_test.step(policy.get_action(ob)[0])
-            imgs.append(env_test.render('rgb_array'))
+            if traj_cnt <= video_traj_num:
+                imgs.append(env_test.render('rgb_array'))
         else:
             print(">> Eval traj num: ", traj_cnt)
             traj_cnt += 1
@@ -169,7 +125,10 @@ with tf.Session(config=config) as sess:
     print(">> Success traj num: ", succ_cnt, ", Collision traj num: ", coll_cnt, " out of ", EVAL_TRAJ_NUM,
           " trajs.")
     print(coll_ls)
-    print(np.mean(coll_ls), np.std(coll_ls))
+    print(str(np.mean(coll_ls)) + ', ' + str(np.std(coll_ls)))
     print(succ_ls)
+    with open(log_path + "/eval_results.txt", 'w', encoding='utf-8') as f:
+        f.write(">> Success traj num: " + str(succ_cnt) + ", Collision traj num: " + str(coll_cnt) + " out of " + str(EVAL_TRAJ_NUM) + " trajs.\n")
+        f.write(str(np.mean(coll_ls)) + ', ' + str(np.std(coll_ls)))
 
     save_video(imgs, os.path.join(f"{log_path}/policy_videos/skill_0_eval.avi"))

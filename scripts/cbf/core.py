@@ -404,7 +404,11 @@ def loss_barrier_flex(h, s, r, ttc, indicator, indices=None, eps=[1e-3, 0]):
     """
 
     h_reshape = tf.reshape(h, [-1])
+
+
     dang_mask = ttc_dangerous_mask(s, r=r, ttc=ttc, indices=indices)  # YY: ttc_dangerous_mask used to measure safety
+
+    tf.print(dang_mask)
 
     '''
     Use indicator to generate mask
@@ -417,6 +421,7 @@ def loss_barrier_flex(h, s, r, ttc, indicator, indices=None, eps=[1e-3, 0]):
         dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
         # dang_mask = tf.cast(dang_mask, tf.int32)
 
+    tf.print(dang_mask)
 
 
     dang_mask_reshape = tf.reshape(dang_mask, [-1])
