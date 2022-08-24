@@ -95,6 +95,7 @@ def build_optimizer(loss):
 
 
 def get_action_graph(num_agents, ob, policy):
+    print(ob)
     dist, mean, log_std = policy.build(ob, name='action').outputs
     samples = dist.sample(seed=deterministic.get_tf_seed_stream())
     # print(samples[0, 0, :])
@@ -300,8 +301,8 @@ def main():
 
     writer = SummaryWriter(save_path)
 
-    env_graph = GymEnv(carEnv(), max_episode_length=50)
-    env = carEnv()
+    env_graph = GymEnv(carEnv(demo=demo_path), max_episode_length=50)
+    env = carEnv(demo=demo_path)
 
 
 
@@ -361,7 +362,7 @@ def main():
         safety_ratios_epoch_lqr = []
         
         for istep in range(TRAIN_STEP):
-            ob = env.reset()
+            ob, obv_full = env.reset()
             traj_id = env.get_traj_id()
             # read demonstrations
             with open(demo_path, 'rb') as f:
@@ -397,24 +398,24 @@ def main():
 
                 # computes the control input a_np using the safe controller
 
-                a_np = sess.run([a], feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a})
+                a_np = sess.run([a], feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]), other_as: other_a})
 
-                # a_np, out = sess.run([a, accumulate_ops], feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a})
+                # a_np, out = sess.run([a, accumulate_ops], feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]), other_as: other_a})
 
                 # if np.random.uniform() < config.ADD_NOISE_PROB:
                 #     noise = np.random.normal(size=np.shape(a_np)) * config.NOISE_SCALE
                 #     a_np = a_np + noise
 
                 # YY: Get ob # simulate the system for one step
-                ob_next, rew, done, info = env.step(a_np[0][-1, :])
+                ob_next, rew, done, info, obv_full = env.step(a_np[0][-1, :])  # TODO: change here, the state dimension!!
                 # ob_next, rew, done, info = env.step(a_np[-1, :])
-                s_np = ob.reshape([-1, 4])
+                s_np = obv_full.reshape([-1, 4])
 
-                out, loss_reward_s, loss_s = sess.run([accumulate_ops, loss_reward, loss],
-                                     feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 36]), other_as: other_a, obv_next: ob_next.reshape([1, 36])})
+                out, loss_s = sess.run([accumulate_ops, loss],
+                                     feed_dict={s: s_np, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]), other_as: other_a, obv_next: ob_next.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)])})
                 out = out[0]
                 demo_loss_ls.append(loss_s)
-                loss_reward_ls.append(loss_reward_s)
+                # loss_reward_ls.append(loss_reward_s)
                 ob = ob_next
 
                 # # simulate the system for one step
@@ -459,7 +460,7 @@ def main():
 
 
             writer.add_scalar('Loss_objective', np.mean(demo_loss_ls), istep)
-            writer.add_scalar('Loss_reward', np.sum(loss_reward_ls), istep)
+            # writer.add_scalar('Loss_reward', np.sum(loss_reward_ls), istep)
 
 
 

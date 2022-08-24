@@ -78,17 +78,20 @@ def generate_data(num_agents, dist_min_thres):
 
 # YY: CBF NN
 def network_cbf(x, r, indices=None):
+
     d_norm = tf.sqrt(
         tf.reduce_sum(tf.square(x[:, :, :2]) + 1e-4, axis=2))  # YY: Get 2 norm distance between each agent
     x = tf.concat([x,
         tf.expand_dims(tf.eye(tf.shape(x)[0]), 2),
         tf.expand_dims(d_norm - r, 2)], axis=2)  # YY: shape: [num_agent, num_agent, 6]
-    # print('YY: ', x.shape)
+
     x, indices = remove_distant_agents(x=x, k=config.TOP_K, indices=indices)
-    # print('YY: ', x.shape)
+
     dist = tf.sqrt(
         tf.reduce_sum(tf.square(x[:, :, :2]) + 1e-4, axis=2, keepdims=True))
-    mask = tf.cast(tf.less_equal(dist, config.OBS_RADIUS), tf.float32)
+    input_ = dist
+    mask = tf.cast(tf.less_equal(dist, config.OBS_RADIUS), tf.float32)  # if distance is too large, the obs will be overlook
+    # input_ = x
     x = tf.contrib.layers.conv1d(inputs=x, 
                                  num_outputs=64,
                                  kernel_size=1, 
@@ -113,7 +116,8 @@ def network_cbf(x, r, indices=None):
                                  reuse=tf.AUTO_REUSE,
                                  scope='cbf/conv_4', 
                                  activation_fn=None)
-    x = x * mask
+    ori = x
+    x = x * mask  # filter out too far away obs
     return x, mask, indices
 
 # YY: Policy NN
@@ -212,8 +216,6 @@ def loss_barrier(h, s, r, ttc, indices=None, eps=[1e-3, 0]):
     num_dang = tf.cast(tf.shape(dang_h)[0], tf.float32)
     num_safe = tf.cast(tf.shape(safe_h)[0], tf.float32)
 
-    print("dang_h.shape: ", dang_h.shape)
-
     loss_dang = tf.reduce_sum(
         tf.math.maximum(dang_h + eps[0], 0)) / (1e-5 + num_dang)
     loss_safe = tf.reduce_sum(
@@ -240,7 +242,7 @@ def loss_derivatives(s, a, h, x, r, ttc, alpha, indices=None, eps=[1e-3, 0]):
     x_next = tf.expand_dims(s_next, 1) - tf.expand_dims(s_next, 0)
     h_next, mask_next, _ = network_cbf(x=x_next, r=config.DIST_MIN_THRES, indices=indices)
 
-    deriv = h_next - h + config.TIME_STEP * alpha * h
+    deriv = h_next - h + config.TIME_STEP * alpha * h  # deriv h
     deriv_reshape = tf.reshape(deriv, [-1])
 
 
@@ -356,17 +358,18 @@ def ttc_dangerous_mask_np(s, r, ttc):
 # YY: indices should be the rest agents (?)
 def remove_distant_agents(x, k, indices=None):
     n, _, c = x.get_shape().as_list()
-    if n <= k:
+    if n <= k:   # if #agents < topk, return directly
         return x, False
     d_norm = tf.sqrt(tf.reduce_sum(tf.square(x[:, :, :2]) + 1e-6, axis=2))
     if indices is not None:
         x = tf.reshape(tf.gather_nd(x, indices), [n, k, c])
         return x, indices
-    _, indices = tf.nn.top_k(-d_norm, k=k)
+    _, indices = tf.nn.top_k(-d_norm, k=k)  # shape of d_norm: [17, 17]. return topk indices in dimension 2 in shape: [17, 12]
     row_indices = tf.expand_dims(
         tf.range(tf.shape(indices)[0]), 1) * tf.ones_like(indices)
     row_indices = tf.reshape(row_indices, [-1, 1])
     column_indices = tf.reshape(indices, [-1, 1])
+    # change original indices to [17 * 12, 2]. e.g., [..., ..., [16, 4], [16, 8], [16, 1], ...]
     indices = tf.concat([row_indices, column_indices], axis=1)
     x = tf.reshape(tf.gather_nd(x, indices), [n, k, c])
     return x, indices
@@ -403,29 +406,45 @@ def loss_barrier_flex(h, s, r, ttc, indicator, indices=None, eps=[1e-3, 0]):
         ttc (float): The threshold of time to collision.
     """
 
-    h_reshape = tf.reshape(h, [-1])
 
 
-    dang_mask = ttc_dangerous_mask(s, r=r, ttc=ttc, indices=indices)  # YY: ttc_dangerous_mask used to measure safety
 
-    tf.print(dang_mask)
+    # dang_mask = ttc_dangerous_mask(s, r=r, ttc=ttc, indices=indices)  # YY: ttc_dangerous_mask used to measure safety
+
+    # tf.print(dang_mask)
 
     '''
     Use indicator to generate mask
     '''
-    if indicator == 0:  # dangerous # TODO: not all are dangerous, need to modify!!!
-        dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
-        dan_idx = np.argmin(np.sum(np.square(s[:-1, :2] - s[-1, :2]), axis=1))
-        dang_mask[-1, dan_idx, :] = True
-    else:
-        dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
-        # dang_mask = tf.cast(dang_mask, tf.int32)
+    # if indicator == 0:  # dangerous # TODO: not all are dangerous, need to modify!!!
+    #     dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
+    #     dan_idx = np.argmin(np.sum(np.square(s[:-1, :2] - s[-1, :2]), axis=1))
+    #     dang_mask[-1, dan_idx, :] = True
+    # else:
+    #     dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
+    #     # dang_mask = tf.cast(dang_mask, tf.int32)
 
-    tf.print(dang_mask)
+    n, k, _ = h.get_shape().as_list()
+
+    h_reshape = tf.reshape(h, [-1])[-k:]
 
 
-    dang_mask_reshape = tf.reshape(dang_mask, [-1])
-    safe_mask_reshape = tf.logical_not(dang_mask_reshape)
+    dang_case_dang = np.zeros([k]).astype(bool)
+    dang_case_dang[1] = True
+
+    dang_case_safe = np.ones([k]).astype(bool)
+    dang_case_safe[0], dang_case_safe[1] = False, False
+
+    safe_case_dang = np.zeros([k]).astype(bool)
+
+    safe_case_safe = np.ones([k]).astype(bool)
+    safe_case_safe[0] = False
+
+    dang_mask_reshape = tf.cond(tf.equal(indicator, 0), lambda: dang_case_dang, lambda: safe_case_dang)
+    safe_mask_reshape = tf.cond(tf.equal(indicator, 0), lambda: dang_case_safe, lambda: safe_case_safe)
+
+    # dang_mask_reshape = tf.reshape(dang_mask, [-1])
+    # safe_mask_reshape = tf.logical_not(dang_mask_reshape)
 
     dang_h = tf.boolean_mask(h_reshape, dang_mask_reshape)
     safe_h = tf.boolean_mask(h_reshape, safe_mask_reshape)
@@ -433,7 +452,6 @@ def loss_barrier_flex(h, s, r, ttc, indicator, indices=None, eps=[1e-3, 0]):
     num_dang = tf.cast(tf.shape(dang_h)[0], tf.float32)
     num_safe = tf.cast(tf.shape(safe_h)[0], tf.float32)
 
-    print("dang_h.shape: ", dang_h.shape)
 
     loss_dang = tf.reduce_sum(
         tf.math.maximum(dang_h + eps[0], 0)) / (1e-5 + num_dang)
@@ -450,11 +468,14 @@ def loss_barrier_flex(h, s, r, ttc, indicator, indices=None, eps=[1e-3, 0]):
     acc_safe = tf.cond(
         tf.greater(num_safe, 0), lambda: acc_safe, lambda: -tf.constant(1.0))
 
-    return loss_dang, loss_safe, acc_dang, acc_safe
+    return loss_dang, loss_safe, acc_dang, acc_safe#, dang_h, safe_h
 
 
 # YY: this is the derivatives part in loss function
 def loss_derivatives_flex(s, a, h, x, r, ttc, indicator, alpha, indices=None, eps=[1e-3, 0]):
+    n, k, _ = h.get_shape().as_list()
+
+
     dsdt = dynamics(s, a)  # f(s, u)
     s_next = s + dsdt * config.TIME_STEP
 
@@ -462,30 +483,72 @@ def loss_derivatives_flex(s, a, h, x, r, ttc, indicator, alpha, indices=None, ep
     h_next, mask_next, _ = network_cbf(x=x_next, r=config.DIST_MIN_THRES, indices=indices)
 
     deriv = h_next - h + config.TIME_STEP * alpha * h
-    deriv_reshape = tf.reshape(deriv, [-1])
+    deriv_reshape = tf.reshape(deriv, [-1])[-k:]
 
 
+    # safe_case = np.zeros([k]).astype(bool)
+    # dang_case = safe_case.copy()
+    # dang_case[0] = True
+    # safe_case, dang_case = tf.convert_to_tensor(safe_case), tf.convert_to_tensor(dang_case)
+    #
+    # dang_mask = tf.cond(tf.equal(indicator, 0), lambda: dang_case, lambda: safe_case)
 
-
-    dang_mask = ttc_dangerous_mask(s=s, r=r, ttc=ttc, indices=indices)
+    # dang_mask = ttc_dangerous_mask(s=s, r=r, ttc=ttc, indices=indices)
 
 
 
     '''
     Use indicator to generate mask
     '''
-    if indicator == 0:  # dangerous
-        dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
-        dan_idx = np.argmin(np.sum(np.square(s[:-1, :2] - s[-1, :2]), axis=1))
-        dang_mask[-1, dan_idx, :] = True
-    else:
-        dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
+    # dang_mask = np.zeros(dang_mask.get_shape().as_list())
+    #
+    # dang_mask_tmp = dang_mask.copy()
+    # # dan_idx = np.argmin(np.sum(np.square(s[:-1, :2] - s[-1, :2]), axis=1))#.eval(session=tf.compat.v1.Session())
+    # dan_idx = tf.argmin(tf.reduce_sum(tf.square(s[:-1, :2] - s[-1, :2]), axis=1))  # .eval(session=tf.compat.v1.Session())
+    # dang_mask_tmp[-1, dan_idx, :] = True
+    #
+    # dang_mask = tf.cond(indicator == 0, lambda: dang_mask_tmp, lambda: dang_mask)
+    # dang_mask = tf.convert_to_tensor(dang_mask)
 
 
-    dang_mask_reshape = tf.reshape(dang_mask, [-1])
-    # print("YY: ", dang_mask.shape, dang_mask_reshape.shape, s.shape)
-    # print("YY: ", dang_mask_reshape)
-    safe_mask_reshape = tf.logical_not(dang_mask_reshape)
+
+
+    # dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
+    #
+    # dang_mask_tmp = dang_mask
+    # dan_idx = tf.argmin(tf.reduce_sum(tf.square(s[:-1, :2] - s[-1, :2]), axis=1))#.eval(session=tf.compat.v1.Session())
+    # dang_mask_tmp[-1, dan_idx, :] = True
+    #
+    # dang_mask = tf.cond(indicator == 0, lambda: dang_mask_tmp, lambda: dang_mask)
+
+
+
+
+    # if indicator == 0:  # dangerous
+    #     dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
+    #     dan_idx = np.argmin(np.sum(np.square(s[:-1, :2] - s[-1, :2]), axis=1))
+    #     dang_mask[-1, dan_idx, :] = True
+    # else:
+    #     dang_mask = tf.cast(tf.zeros_like(dang_mask), dtype=tf.bool)
+
+
+    # dang_mask_reshape = tf.reshape(dang_mask, [-1])
+    # safe_mask_reshape = tf.logical_not(dang_mask_reshape)
+
+    dang_case_dang = np.zeros([k]).astype(bool)
+    dang_case_dang[1] = True
+
+    dang_case_safe = np.ones([k]).astype(bool)
+    dang_case_safe[0], dang_case_safe[1] = False, False
+
+    safe_case_dang = np.zeros([k]).astype(bool)
+
+    safe_case_safe = np.ones([k]).astype(bool)
+    safe_case_safe[0] = False
+
+    dang_mask_reshape = tf.cond(tf.equal(indicator, 0), lambda: dang_case_dang, lambda: safe_case_dang)
+    safe_mask_reshape = tf.cond(tf.equal(indicator, 0), lambda: dang_case_safe, lambda: safe_case_safe)
+
 
     dang_deriv = tf.boolean_mask(deriv_reshape, dang_mask_reshape)
     safe_deriv = tf.boolean_mask(deriv_reshape, safe_mask_reshape)

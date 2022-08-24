@@ -184,7 +184,7 @@ class NPO(RLAlgorithm):
 
         self.center_reward_gradients = None
         for _ in trainer.step_epochs():
-            trainer.step_episode = trainer.obtain_episodes(trainer.step_itr)
+            trainer.step_episode = trainer.obtain_episodes(trainer.step_itr)  # yy: rollout episodes using the learned policy
             last_return = self._train_once(trainer.step_itr,
                                            trainer.step_episode)
             trainer.step_itr += 1
@@ -212,7 +212,7 @@ class NPO(RLAlgorithm):
         probs = self.irl_model.eval(paths, gamma=self._discount, itr=itr)
 
         for i, path in enumerate(paths):
-            path['rewards'] += probs[i]
+            path['rewards'] += probs[i]  # yy: replace rewards in rollouts with learned reward so that the policy could be updated
         return paths
 
     def _train_once(self, itr, episodes):

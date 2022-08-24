@@ -221,7 +221,7 @@ class Trainer:
         episodes = self._sampler.obtain_samples(
             itr, (batch_size or self._train_args.batch_size),
             agent_update=agent_update,
-            env_update=env_update)
+            env_update=env_update)  # yy: generate episodes with learned policy
         self._stats.total_env_steps += sum(episodes.lengths)
         return episodes
 

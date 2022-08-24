@@ -56,7 +56,7 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
 
 
     # s is the state vectors of the agents, si = [xi, yi, vx_i, vy_i]
-    s = tf.placeholder(tf.float32, [num_agents, 4], name='ph_state')
+    s = tf.placeholder(tf.float32, [num_agents, 4])
     # g is the goal states
     g = tf.placeholder(tf.float32, [num_agents, 2], name='ph_goal')
     # observation
@@ -67,7 +67,7 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
     # other_as = tf.placeholder(tf.float32, [min(num_agents - 1, config.TOP_K), 2], name='ph_other_as')
     other_as = tf.placeholder(tf.float32, [num_agents - 1, 2], name='ph_other_as')
     # Indicator to indicate the safe and unsafe
-    indicator = tf.placeholder(tf.float32)
+    indicator = tf.placeholder(tf.int32)
 
 
     # x is difference between the state of each agent and other agents
@@ -95,7 +95,7 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
     # loss safe is for h(s) >=0, s in safe set
     # acc_dang is the accuracy that h(s) < 0, s in dangerous set is satisfied
     # acc_safe is the accuracy that h(s) >=0, s in safe set is satisfied
-    (loss_dang, loss_safe, acc_dang, acc_safe) = core.loss_barrier_flex(
+    (loss_dang, loss_safe, acc_dang, acc_safe, dang_h, safe_h) = core.loss_barrier_flex(
         h=h, s=s, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION, indicator=indicator, indices=indices)
     # loss_dang_deriv is for doth(s) + alpha h(s) >=0 for s in dangerous set
     # loss_safe_deriv is for doth(s) + alpha h(s) >=0 for s in safe set
@@ -137,7 +137,7 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
         config.WEIGHT_DECAY * tf.nn.l2_loss(v) for v in tf.trainable_variables()]
     loss = 10 * tf.math.add_n(loss_list + weight_loss)
 
-    return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching, h
+    return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching, h, dang_h, safe_h
 
 
 def count_accuracy(accuracy_lists):
@@ -182,7 +182,7 @@ def main():
                                    env_spec=env_graph.spec,
                                    hidden_sizes=(32, 32))
 
-        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching, h =\
+        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching, h, dang_h, safe_h =\
             build_training_graph(args.num_agents, env_graph, policy, goal_reaching_weight)
 
         sess.run(tf.global_variables_initializer())
@@ -196,6 +196,7 @@ def main():
             save_dictionary_cbf[f'cbf_{idx}'] = var
         saver_cbf = tf.train.Saver(save_dictionary_cbf)
         if os.path.exists(cbf_path):
+            print("Reading CBF path ... ")
             saver_cbf.restore(sess, f"{cbf_path}/model")
 
 
@@ -217,25 +218,54 @@ def main():
         # print(len(S_s), len(S_u))
 
         # Use the following code after the first time to generate unsafe states
-        with open('src/demonstrations/unsafe_states_10_10_16obs.pkl', 'rb') as f:
+        with open('src/demonstrations/unsafe_states_1_10_16obs.pkl', 'rb') as f:
             S_u, A_u = pickle.load(f)
 
-        num = 5
+        S_u_eval = S_u[len(S_u) // 2:]
+
+
         # print(len(S_s), len(S_u))
 
-        for s_s in S_s[:num]:
-            h_ = sess.run(h, feed_dict={s: s_s})
-            print(h_)
-            print("------------------------------------------------------------------")
+        # for s_s in S_s[:num]:
+        #     print(s_s)
+        #     h_, dang_h_, safe_h_ = sess.run([h, dang_h, safe_h], feed_dict={s: s_s, indicator: 1})
+        #
+        #     # print(h_)
+        #     print(dang_h_)
+        #     print(safe_h_)
+        #     print("------------------------------------------------------------------")
+        #
+        # print("======================================================================")
 
-        print("======================================================================")
+        acc_dang_ls, acc_safe_ls = [], []
+        S_u_eval = S_u_eval[-int(len(S_u_eval) * 0.01):]
+        print(len(S_u_eval))
+        for i, s_u in enumerate(S_u_eval):
+            if i % 100 == 0:
+                print(i)
+            # print(s_u)
+            h_, dang_h_, safe_h_ = sess.run([h, dang_h, safe_h], feed_dict={s: s_u, indicator: 0})
 
-        for s_u in S_u[:num]:
-            h_ = sess.run(h, feed_dict={s: s_u})
-            print(h_)
-            print("------------------------------------------------------------------")
+            num_dang = tf.cast(tf.shape(dang_h_)[0], tf.float32)
+            acc_dang = tf.reduce_sum(tf.cast(
+                tf.less_equal(dang_h_, 0), tf.float32)) / (1e-5 + num_dang)
 
+            num_safe = tf.cast(tf.shape(safe_h_)[0], tf.float32)
+            acc_safe = tf.reduce_sum(tf.cast(
+                tf.greater(safe_h_, 0), tf.float32)) / (1e-5 + num_safe)
 
+            acc_dang_ls.append(acc_dang.eval(session=tf.compat.v1.Session())   )
+            acc_safe_ls.append(acc_safe.eval(session=tf.compat.v1.Session())   )
+            # # print(h_)
+            # print(dang_h_)
+            # print(safe_h_)
+            # print("------------------------------------------------------------------")
+        print(acc_dang_ls)
+        print(np.mean(acc_dang_ls), np.mean(acc_safe_ls))
+        # s_rand = np.random.rand(17, 4)
+        # h_, dang_h_, safe_h_ = sess.run([h, dang_h, safe_h], feed_dict={s: s_rand, indicator: 0})
+        # print(s_rand)
+        # print(h_)
 
 if __name__ == '__main__':
     main()

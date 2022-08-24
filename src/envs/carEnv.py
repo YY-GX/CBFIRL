@@ -15,7 +15,7 @@ from garage.tf.policies import GaussianMLPPolicy
 from garage.envs import GymEnv
 
 class carEnv(Env):
-    def __init__(self, demo='src/demonstrations/safe_demo_better.pkl', seed=10):
+    def __init__(self, demo='src/demonstrations/safe_demo_better.pkl', seed=10, is_hundred=False):
         super(carEnv, self).__init__()
 
         random.seed(seed)
@@ -53,6 +53,9 @@ class carEnv(Env):
 
         self.max_episode_length = 1000
 
+        # special setting for 100 per
+        self.is_hundred = is_hundred
+
 
 
 
@@ -78,7 +81,13 @@ class carEnv(Env):
         self.obs_state_removed = self.remove_dist_obs(self.agent_state, self.obs_state)
         obv = np.concatenate([self.obs_state_removed, self.agent_state[None, :]], axis=0).flatten()
 
-        return obv
+
+
+        if self.is_hundred:
+            full_obv = np.concatenate([self.obs_state, self.agent_state[None, :]], axis=0).flatten()
+            return obv, full_obv
+        else:
+            return obv
 
 
     def step(self, action):
@@ -99,6 +108,7 @@ class carEnv(Env):
 
         # concatenate obv
         obv = np.concatenate([self.obs_state_removed, self.agent_state[None, :]], axis=0).flatten()
+        obv_full = np.concatenate([self.obs_state, self.agent_state[None, :]], axis=0).flatten()
 
         # print("===================================")
         # print(self.goal_state)
@@ -123,11 +133,15 @@ class carEnv(Env):
             # done = True
             self.collision_num += 1
 
-
         if self.is_vis:
             self.draw_fig()
 
-        return obv, reward, done, {'success': self.success, 'collision_num': self.collision_num}  # don't need to define reward because it's irl
+        if self.is_hundred:
+            return obv, reward, done, {'success': self.success,
+                                       'collision_num': self.collision_num}, obv_full  # don't need to define reward because it's irl
+        else:
+            return obv, reward, done, {'success': self.success,
+                                       'collision_num': self.collision_num}  # don't need to define reward because it's irl
 
 
     def render(self, mode="rgb_array"):

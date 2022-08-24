@@ -22,6 +22,7 @@ from models.architectures import relu_net
 import envs.config as config_file
 from torch.utils.tensorboard import SummaryWriter
 
+
 np.set_printoptions(4)
 
 def parse_args():
@@ -35,8 +36,12 @@ def parse_args():
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
     parser.add_argument('--gpu', type=str, default='0')
     parser.add_argument('--num', type=int, default=0)
+    parser.add_argument('--is_hundred', type=int, default=0)
+    parser.add_argument('--training_epoch', type=int, required=False, default=20000)
     args = parser.parse_args()
     return args
+
+
 
 
 def build_optimizer(loss):
@@ -105,7 +110,6 @@ def get_action_graph(num_agents, ob, policy):
 
 
 
-
 def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
     # policy = GaussianMLPPolicy(name='action',
     #                            env_spec=env.spec,
@@ -163,7 +167,7 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
         ) = core.loss_derivatives_flex(s=s, a=a, h=h, x=x, r=config.DIST_MIN_THRES,
         indices=indices, ttc=config.TIME_TO_COLLISION, indicator=indicator, alpha=config.ALPHA_CBF)
 
-    # TODO: delete this one
+    # TODO: Delete this one
     # the distance between the a and the nominal a  YY: this is the goal reaching loss
     # loss_action = core.loss_actions(
     #     s=s, g=g, a=a, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION)
@@ -184,8 +188,6 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
         loss_reward = tf.reduce_sum(-relu_net(rew_input))
 
 
-
-    goal_reaching_weight = 0
     loss_list = [2 * loss_dang, loss_safe, 2 * loss_dang_deriv, loss_safe_deriv, goal_reaching_weight * loss_reward]  # YY: 0.01 original for loss_action
     acc_list = [acc_dang, acc_safe, acc_dang_deriv, acc_safe_deriv]
 
@@ -195,7 +197,8 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
         config.WEIGHT_DECAY * tf.nn.l2_loss(v) for v in tf.trainable_variables()]
     loss = 10 * tf.math.add_n(loss_list + weight_loss)
 
-    return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching
+    return s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching, acc_dang, acc_safe
+
 
 
 def count_accuracy(accuracy_lists):
@@ -204,6 +207,8 @@ def count_accuracy(accuracy_lists):
     for i in range(acc.shape[1]):
         acc_list.append(np.mean(acc[acc[:, i] >= 0, i]))
     return acc_list
+
+
 
 def generate_unsafe_states(S_s, A_s, num_ratio=0.1, num_unsafe_state_each_frame=3):
     # randomly select some frames to create unsafe states
@@ -233,6 +238,7 @@ def generate_unsafe_states(S_s, A_s, num_ratio=0.1, num_unsafe_state_each_frame=
     return S_u, A_u
 
 
+
 def demo_remove_top_k(demos, topk):
     for i, demo in enumerate(demos):
         obvs = demo['observations']
@@ -240,6 +246,8 @@ def demo_remove_top_k(demos, topk):
             topk_mask = np.argsort(np.sum(np.square((obv[:-1, :] - obv[-1, :])[:, :2]), axis=1))[:topk]
             demos[i]['observations'][j] = np.concatenate([obv[:-1, :][topk_mask, :], obv[-1, :][None, :]], axis=0)
     return demos
+
+
 
 def state_remove_top_k(state, topk):
     # print(np.sum(np.square((state[:-1, :] - state[-1, :])[:, :2]), axis=1))
@@ -254,7 +262,8 @@ def state_remove_top_k(state, topk):
     # return demos
 
 
-def main():
+
+def ours():
     args = parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     demo_pth = args.demo_pth
@@ -276,10 +285,9 @@ def main():
                                    env_spec=env_graph.spec,
                                    hidden_sizes=(32, 32))
 
-        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching =\
+        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching, acc_dang, acc_safe =\
             build_training_graph(args.num_agents, env_graph, policy, goal_reaching_weight)
         zero_ops, accumulate_ops, train_step_h, train_step_a = build_optimizer(loss)
-
         accumulate_ops.append(loss_list)
         accumulate_ops.append(acc_list)
 
@@ -357,8 +365,13 @@ def main():
 
 
         # Use the following code after the first time to generate unsafe states
-        with open('src/demonstrations/unsafe_states_3_10_16obs.pkl', 'rb') as f:
+        with open('src/demonstrations/unsafe_states_1_10_16obs.pkl', 'rb') as f:
             S_u, A_u = pickle.load(f)
+
+        S_s_eval = S_s[len(S_s) // 2:]
+        S_u_eval = S_u[len(S_u) // 2:]
+        S_s = S_s[:len(S_s) // 2]
+        S_u = S_u[:len(S_u) // 2]
 
 
 
@@ -373,6 +386,8 @@ def main():
         Start training!
         '''
         print("Total training steps: ", TRAIN_STEPS)
+        print("Unsafe states number: ", unsafe_length)
+        # TRAIN_STEPS = 71
         for istep in range(TRAIN_STEPS):
             # if istep > 11:
             #     break
@@ -406,66 +421,316 @@ def main():
             '''
             Main training parts
             '''
-            loss_safety_ls_safe, loss_goal_reaching_ls_safe = [], []
-            for i, s_s in enumerate(S_s_iter):
-                all_agents_actions = A_s_iter[i]
+
+            # Mix up S_s & S_u
+            # loss_safety_ls_safe, loss_goal_reaching_ls_safe = [], []
+            for i in range(len(S_s_iter) + len(S_u_iter)):
+                if len(S_s_iter) == 0:
+                    s_ = S_u_iter.pop(0)
+                    indicator_ = 0
+                    all_agents_actions = A_u_iter.pop(0)
+                elif len(S_u_iter) == 0:
+                    s_ = S_s_iter.pop(0)
+                    indicator_ = 1
+                    all_agents_actions = A_s_iter.pop(0)
+                elif random.random() > .5:  # select one safe state
+                    s_ = S_s_iter.pop(0)
+                    indicator_ = 1
+                    all_agents_actions = A_s_iter.pop(0)
+                else:
+                    s_ = S_u_iter.pop(0)
+                    indicator_ = 0
+                    all_agents_actions = A_u_iter.pop(0)
+
+
+
                 other_a = all_agents_actions[:-1, :]  # YY: obs num * 2
 
-                ob = state_remove_top_k(s_s, config.TOP_K)
+                ob = state_remove_top_k(s_, config.TOP_K)
 
-                a_np = sess.run([a], feed_dict={s: s_s, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]), other_as: other_a})
-
-                ob_next, rew, done, info = env.step(a_np[0][-1, :])
-                out, loss_safety_, loss_goal_reaching_ =\
-                    sess.run([accumulate_ops, loss_safety, loss_goal_reaching], feed_dict={s: s_s, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]),
-                                                                 other_as: other_a, indicator: 1, obv_next: ob_next.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)])})
-                loss_safety_ls_safe.append(loss_safety_)
-                loss_goal_reaching_ls_safe.append(loss_goal_reaching_)
-
-                # a_np, out = sess.run([a, accumulate_ops],
-                #                  feed_dict={s: s_s, g: g_np, indicator: 1, obv: ob.reshape([1, 4 * args.num_agents]), other_as: other_a})
-
-            loss_safety_ls_safe, loss_goal_reaching_ls_safe = np.mean(loss_safety_ls_safe), np.mean(loss_goal_reaching_ls_safe)
-
-            loss_safety_ls_unsafe, loss_goal_reaching_ls_unsafe = [], []
-            for i, s_u in enumerate(S_u_iter):
-                all_agents_actions = A_u_iter[i]
-                other_a = all_agents_actions[:-1, :]  # YY: obs num * 2
-
-                # print(s_u)
-
-                ob = state_remove_top_k(s_u, config.TOP_K)
-
-                a_np = sess.run([a], feed_dict={s: s_s, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]), other_as: other_a})
+                a_np = sess.run([a], feed_dict={s: s_, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]), other_as: other_a})
 
                 ob_next, rew, done, info = env.step(a_np[0][-1, :])
-                out, loss_safety_, loss_goal_reaching_ =\
-                    sess.run([accumulate_ops, loss_safety, loss_goal_reaching], feed_dict={s: s_s, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]),
-                                                                 other_as: other_a, indicator: 0, obv_next: ob_next.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)])})
-                loss_safety_ls_unsafe.append(loss_safety_)
-                loss_goal_reaching_ls_unsafe.append(loss_goal_reaching_)
-                # a_np, out = sess.run([a, accumulate_ops],
-                #                      feed_dict={s: s_u, g: g_np, indicator: 0, obv: ob.reshape([1, 4 * args.num_agents]), other_as: other_a})
+                out, loss_safety_, loss_goal_reaching_ = \
+                    sess.run([accumulate_ops, loss_safety, loss_goal_reaching], feed_dict={s: s_, g: g_np,
+                                                                                           obv: ob.reshape([1,
+                                                                                                            4 * min(
+                                                                                                                config.TOP_K + 1,
+                                                                                                                args.num_agents)]),
+                                                                                           other_as: other_a,
+                                                                                           indicator: indicator_,
+                                                                                           obv_next: ob_next.reshape(
+                                                                                               [1, 4 * min(
+                                                                                                   config.TOP_K + 1,
+                                                                                                   args.num_agents)])})
+                # loss_safety_ls_safe.append(loss_safety_)
+                # loss_goal_reaching_ls_safe.append(loss_goal_reaching_)
 
-            loss_safety_ls_unsafe, loss_goal_reaching_ls_unsafe = np.mean(loss_safety_ls_unsafe), np.mean(loss_goal_reaching_ls_unsafe)
+                # Original codebase way to add accuracy and loss
+                loss_list_np, acc_list_np = out[-2], out[-1]
+                loss_lists_np.append(loss_list_np)
+                acc_lists_np.append(acc_list_np)
+
+
+            # loss_safety_ls_safe, loss_goal_reaching_ls_safe = [], []
+            # for i, s_s in enumerate(S_s_iter):
+            #     all_agents_actions = A_s_iter[i]
+            #     other_a = all_agents_actions[:-1, :]  # YY: obs num * 2
+            #
+            #     ob = state_remove_top_k(s_s, config.TOP_K)
+            #
+            #     a_np = sess.run([a], feed_dict={s: s_s, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]), other_as: other_a})
+            #
+            #     ob_next, rew, done, info = env.step(a_np[0][-1, :])
+            #     out, loss_safety_, loss_goal_reaching_ =\
+            #         sess.run([accumulate_ops, loss_safety, loss_goal_reaching], feed_dict={s: s_s, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]),
+            #                                                      other_as: other_a, indicator: 1, obv_next: ob_next.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)])})
+            #     loss_safety_ls_safe.append(loss_safety_)
+            #     loss_goal_reaching_ls_safe.append(loss_goal_reaching_)
+            #
+            #     # Original codebase way to add accuracy and loss
+            #     loss_list_np, acc_list_np = out[-2], out[-1]
+            #     loss_lists_np.append(loss_list_np)
+            #     acc_lists_np.append(acc_list_np)
+            #
+            #     # a_np, out = sess.run([a, accumulate_ops],
+            #     #                  feed_dict={s: s_s, g: g_np, indicator: 1, obv: ob.reshape([1, 4 * args.num_agents]), other_as: other_a})
+            #
+            # loss_safety_ls_safe, loss_goal_reaching_ls_safe = np.mean(loss_safety_ls_safe), np.mean(loss_goal_reaching_ls_safe)
+            #
+            # loss_safety_ls_unsafe, loss_goal_reaching_ls_unsafe = [], []
+            # for i, s_u in enumerate(S_u_iter):
+            #     all_agents_actions = A_u_iter[i]
+            #     other_a = all_agents_actions[:-1, :]  # YY: obs num * 2
+            #
+            #     # print(s_u)
+            #
+            #     ob = state_remove_top_k(s_u, config.TOP_K)
+            #
+            #     a_np = sess.run([a], feed_dict={s: s_s, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]), other_as: other_a})
+            #
+            #     ob_next, rew, done, info = env.step(a_np[0][-1, :])
+            #     out, loss_safety_, loss_goal_reaching_ =\
+            #         sess.run([accumulate_ops, loss_safety, loss_goal_reaching], feed_dict={s: s_s, g: g_np, obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]),
+            #                                                      other_as: other_a, indicator: 0, obv_next: ob_next.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)])})
+            #     loss_safety_ls_unsafe.append(loss_safety_)
+            #     loss_goal_reaching_ls_unsafe.append(loss_goal_reaching_)
+            #
+            #     # Original codebase way to add accuracy and loss
+            #     loss_list_np, acc_list_np = out[-2], out[-1]
+            #     loss_lists_np.append(loss_list_np)
+            #     acc_lists_np.append(acc_list_np)
+            #     # a_np, out = sess.run([a, accumulate_ops],
+            #     #                      feed_dict={s: s_u, g: g_np, indicator: 0, obv: ob.reshape([1, 4 * args.num_agents]), other_as: other_a})
+
+            # loss_safety_ls_unsafe, loss_goal_reaching_ls_unsafe = np.mean(loss_safety_ls_unsafe), np.mean(loss_goal_reaching_ls_unsafe)
+
+
+            # TODO: check whether this is a good way
+            if np.mod(istep // 10, 2) == 0:
+                sess.run(train_step_h)
+            else:
+                sess.run(train_step_a)
+
+            EVAL_STEPS, EVAL_RATIO = 10, 0.5
+            if np.mod(istep, EVAL_STEPS) == 0:
+                s_u_eval, s_s_eval = random.sample(S_u_eval, int(len(S_u_eval) * EVAL_RATIO)), random.sample(S_s_eval, int(len(S_s_eval) * EVAL_RATIO))
+                s_u_eval, s_s_eval = [(s_u, 0) for s_u in s_u_eval], [(s_s, 1) for s_s in s_s_eval]
+                eval_ls = s_u_eval + s_s_eval
+                random.shuffle(eval_ls)
+                acc_dang_ls, acc_safe_ls = [], []
+                for _ in range(len(eval_ls)):
+                    s__, indicator_ = eval_ls.pop()
+                    acc_dang_, acc_safe_ = sess.run([acc_dang, acc_safe], feed_dict={s: s__, indicator: indicator_})
+                    if acc_dang_ != -1:
+                        acc_dang_ls.append(acc_dang_)
+                    acc_safe_ls.append(acc_safe_)
+                writer.add_scalar('EVAL_ACC_DANGER', np.mean(acc_dang_ls), istep // EVAL_STEPS)
+                writer.add_scalar('EVAL_ACC_SAFE', np.mean(acc_safe_ls), istep // EVAL_STEPS)
+
+
+
+            if np.mod(istep, config.DISPLAY_STEPS) == 0:
+                acc_ls = np.array(count_accuracy(acc_lists_np))
+                print('Step: {}, Loss: {}, Accuracy: {}'.format(
+                    istep, np.mean(loss_lists_np, axis=0),
+                    acc_ls))
+                # writer.add_scalar('Ori_Loss', np.asscalar(np.mean(loss_lists_np, axis=0)), istep)
+                writer.add_scalar('Ori_Acc_barrier_dangerous', acc_ls[0], istep // config.DISPLAY_STEPS)
+                writer.add_scalar('Ori_Acc_barrier_safe', acc_ls[1], istep // config.DISPLAY_STEPS)
+                writer.add_scalar('Ori_Acc_deriv_dangerous', acc_ls[2], istep // config.DISPLAY_STEPS)
+                writer.add_scalar('Ori_Acc_deriv_safe', acc_ls[3], istep // config.DISPLAY_STEPS)
+                loss_lists_np, acc_lists_np, dist_errors_np, safety_ratios_epoch, safety_ratios_epoch_lqr = [], [], [], [], []
+
+
+            # print('loss_safety_ls_safe: ', loss_safety_ls_safe)
+            # print('loss_goal_reaching_ls_safe: ', loss_goal_reaching_ls_safe)
+            # print('loss_safety_ls_unsafe: ', loss_safety_ls_unsafe)
+            # print('loss_goal_reaching_ls_unsafe: ', loss_goal_reaching_ls_unsafe)
+
+            # writer.add_scalar(str(args.num) + '_loss_safety_ls_safe', loss_safety_ls_safe, istep)
+            # writer.add_scalar(str(args.num) + '_loss_goal_reaching_ls_safe', loss_goal_reaching_ls_safe, istep)
+            # writer.add_scalar(str(args.num) + '_loss_safety_ls_unsafe', loss_safety_ls_unsafe, istep)
+            # writer.add_scalar(str(args.num) + '_loss_goal_reaching_ls_unsafe', loss_goal_reaching_ls_unsafe, istep)
+
+        saver.save(sess, f"{share_path}/model")
+        saver_cbf.save(sess, f"{cbf_path}/model")
+
+
+
+def hundred_per():
+    # Params
+    args = parse_args()
+    goal_reaching_weight = args.goal_reaching_weight
+    TRAIN_STEP = args.training_epoch
+
+    demo_path = args.demo_pth
+    share_path = args.share_path
+    cbf_path = args.cbf_path
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+
+
+    writer = SummaryWriter(share_path)
+
+    env_graph = GymEnv(carEnv(demo=demo_path, is_hundred=True), max_episode_length=50)
+    env = carEnv(demo=demo_path, is_hundred=True)
+
+    accumulation_steps = config.INNER_LOOPS
+
+    with tf.Session() as sess:
+
+        policy = GaussianMLPPolicy(name='action',
+                                   env_spec=env_graph.spec,
+                                   hidden_sizes=(32, 32))
+
+        s, g, obv, other_as, a, loss_list, loss, acc_list, a_agent, indicator, obv_next, loss_safety, loss_goal_reaching = \
+            build_training_graph(args.num_agents, env_graph, policy, goal_reaching_weight)
+        zero_ops, accumulate_ops, train_step_h, train_step_a = build_optimizer(loss)
+
+        accumulate_ops.append(loss_list)
+        accumulate_ops.append(acc_list)
+
+        sess.run(tf.global_variables_initializer())
+
+
+
+        # Restore policy and reward params
+        save_dictionary = {}
+        for idx, var in enumerate(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              scope=f'action')):
+            if idx > 6:
+                break
+            save_dictionary[f'action_0_{idx}'] = var
+
+        for idx, var in enumerate(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              scope=f'reward')):
+            save_dictionary[f'reward_0_{idx}'] = var
+
+        saver = tf.train.Saver(save_dictionary)
+        saver.restore(sess, f"{share_path}/model")
+
+
+
+        # Restore cbf params
+        save_dictionary_cbf = {}
+        for idx, var in enumerate(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              scope=f'cbf')):
+            save_dictionary_cbf[f'cbf_{idx}'] = var
+        saver_cbf = tf.train.Saver(save_dictionary_cbf)
+        if os.path.exists(cbf_path):
+            saver_cbf.restore(sess, f"{cbf_path}/model")
+
+
+        loss_lists_np = []
+        acc_lists_np = []
+        dist_errors_np = []
+        init_dist_errors_np = []
+
+        safety_ratios_epoch = []
+
+        for istep in range(TRAIN_STEP):
+            ob, obv_full = env.reset()
+            traj_id = env.get_traj_id()
+            # read demonstrations
+            with open(demo_path, 'rb') as f:
+                demonstrations = pickle.load(f)
+
+            all_actions = demonstrations[traj_id]['actions']
+
+            s_np, g_np = env.get_start_goal_states()
+
+            init_dist_errors_np.append(np.mean(np.linalg.norm(s_np[:, :2] - g_np, axis=1)))
+            sess.run(zero_ops)
+
+            demo_loss_ls, loss_reward_ls = [], []
+            # run the system with the safe controller
+            for i in range(len(all_actions)):
+                # Get action of obstacles
+                other_a = all_actions[i][:-1, :]  # YY: obs num * 2
+                # Get action of agent
+                a_np = sess.run([a], feed_dict={s: s_np, g: g_np,
+                                                obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]),
+                                                other_as: other_a})
+                # Step
+                ob_next, rew, done, info, obv_full = env.step(
+                    a_np[0][-1, :])
+                # Accumulate gradient
+                out, loss_s = sess.run([accumulate_ops, loss],
+                                       feed_dict={s: s_np, g: g_np,
+                                                  obv: ob.reshape([1, 4 * min(config.TOP_K + 1, args.num_agents)]),
+                                                  other_as: other_a, obv_next: ob_next.reshape(
+                                               [1, 4 * min(config.TOP_K + 1, args.num_agents)])})
+                out = out[0]
+                demo_loss_ls.append(loss_s)
+
+                # Set next step ob and state (they are diff dim)
+                ob = ob_next  # ob size: [min(num_agent, topk) * 4]
+                s_np = obv_full.reshape([-1, 4])  # s_np size: [num_agent * 4]
+
+
+                safety_ratio = 1 - np.mean(core.ttc_dangerous_mask_np(
+                    s_np, config.DIST_MIN_CHECK, config.TIME_TO_COLLISION_CHECK), axis=1)
+                safety_ratio = np.mean(safety_ratio == 1)
+                safety_ratios_epoch.append(safety_ratio)
+                loss_list_np, acc_list_np = out[-2], out[-1]
+                loss_lists_np.append(loss_list_np)
+                acc_lists_np.append(acc_list_np)
+
+                if np.mean(
+                        np.linalg.norm(s_np[:, :2] - g_np, axis=1)
+                ) < config.DIST_MIN_CHECK:
+                    break
+
+            dist_errors_np.append(np.mean(np.linalg.norm(s_np[:, :2] - g_np, axis=1)))
 
             if np.mod(istep // 10, 2) == 0:
                 sess.run(train_step_h)
             else:
                 sess.run(train_step_a)
 
-            print('loss_safety_ls_safe: ', loss_safety_ls_safe)
-            print('loss_goal_reaching_ls_safe: ', loss_goal_reaching_ls_safe)
-            print('loss_safety_ls_unsafe: ', loss_safety_ls_unsafe)
-            print('loss_goal_reaching_ls_unsafe: ', loss_goal_reaching_ls_unsafe)
+            if np.mod(istep, config.DISPLAY_STEPS) == 0:
+                # print('Step: {}, Loss: {}, Accuracy: {}'.format(
+                #     istep, np.mean(loss_lists_np, axis=0),
+                #     np.array(count_accuracy(acc_lists_np))))
+                print('Step: {}'.format(istep))
+                loss_lists_np, acc_lists_np, dist_errors_np, safety_ratios_epoch, safety_ratios_epoch_lqr = [], [], [], [], []
 
-            writer.add_scalar(str(args.num) + '_loss_safety_ls_safe', loss_safety_ls_safe, istep)
-            writer.add_scalar(str(args.num) + '_loss_goal_reaching_ls_safe', loss_goal_reaching_ls_safe, istep)
-            writer.add_scalar(str(args.num) + '_loss_safety_ls_unsafe', loss_safety_ls_unsafe, istep)
-            writer.add_scalar(str(args.num) + '_loss_goal_reaching_ls_unsafe', loss_goal_reaching_ls_unsafe, istep)
+            writer.add_scalar('Loss_objective', np.mean(demo_loss_ls), istep)
 
+
+        # Save model
         saver.save(sess, f"{share_path}/model")
         saver_cbf.save(sess, f"{cbf_path}/model")
 
+
+
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    if args.is_hundred:
+        hundred_per()
+    else:
+        ours()

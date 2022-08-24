@@ -50,7 +50,7 @@ def show_safe_demo():
         
 
 def show_unsafe_demo():
-    with open('src/demonstrations/unsafe_states_1_10.pkl', 'rb') as f:
+    with open('src/demonstrations/unsafe_states_10_10_16obs.pkl', 'rb') as f:
         S_u, A_u = pickle.load(f)
 
     fig = plt.figure(figsize=(9, 4))
@@ -307,7 +307,7 @@ def visualize_learned_reward():
         #     pickle.dump(reward_all_traj, f)
 
 if __name__ == "__main__":
-    show_safe_demo()
-    # show_unsafe_demo()
+    # show_safe_demo()
+    show_unsafe_demo()
 
     # visualize_learned_reward()

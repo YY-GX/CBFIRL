@@ -40,7 +40,6 @@ def parse_args():
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
     parser.add_argument('--epoch_num', type=int, required=False, default=400)
-    parser.add_argument('--eval_num', type=int, required=False, default=10)
     parser.add_argument('--share_pth', type=str, default=None)
     parser.add_argument('--airl_pth', type=str, default=None)
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
@@ -80,7 +79,6 @@ airl_path = args.airl_pth
 # params
 NUM_DEMO_USED = args.demo_num
 EPOCH_NUM = args.epoch_num
-EVAL_TRAJ_NUM = args.eval_num
 demo_pth = args.demo_pth
 
 

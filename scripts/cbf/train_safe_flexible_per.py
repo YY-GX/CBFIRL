@@ -243,7 +243,7 @@ def demo_remove_top_k(demos, topk):
 def state_remove_top_k(state, topk):
     # print(np.sum(np.square((state[:-1, :] - state[-1, :])[:, :2]), axis=1))
     topk_mask = np.argsort(np.sum(np.square((state[:-1, :] - state[-1, :])[:, :2]), axis=1))[:topk]
-    return np.concatenate([state[:-1, :][topk_mask, :], state[-1, :][Non-e, :]], axis=0)
+    return np.concatenate([state[:-1, :][topk_mask, :], state[-1, :][None, :]], axis=0)
 
     # for i, demo in enumerate(demos):
     #     obvs = demo['observations']
