@@ -61,6 +61,7 @@ class carEnv(Env):
 
 
     def reset(self):
+        self.unsafe_states = []  # yy: store states before collision, return it when done
         self.success = 0
         self.collision_num = 0
         self.timestep = 0
@@ -91,6 +92,9 @@ class carEnv(Env):
 
 
     def step(self, action):
+        last_timestep_agent_state = self.agent_state
+        last_timestep_obs_state = self.obs_state
+
         self.timestep += 1
         self.step_num += 1
         if self.timestep >= len(self.traj['observations']):
@@ -128,9 +132,11 @@ class carEnv(Env):
             # self.agent_state[2:] = 0
             self.success = 1
 
-        elif not np.all(np.linalg.norm(self.obs_state[:, :2] - self.agent_state[:2], axis = 1) > config.DIST_MIN_CHECK):
+        elif not np.all(np.linalg.norm(self.obs_state[:, :2] - self.agent_state[:2], axis=1) > config.DIST_MIN_CHECK):
             # print("Collision detected!")
             # done = True
+            # idx = np.where(np.linalg.norm(self.obs_state[:, :2] - self.agent_state[:2], axis=1) > config.DIST_MIN_CHECK == False)
+            # self.unsafe_states.append((np.concatenate([last_timestep_obs_state, last_timestep_agent_state[None, :]], axis=0), idx))
             self.collision_num += 1
 
         if self.is_vis:
@@ -140,6 +146,9 @@ class carEnv(Env):
             return obv, reward, done, {'success': self.success,
                                        'collision_num': self.collision_num}, obv_full  # don't need to define reward because it's irl
         else:
+            # return obv, reward, done, {'success': self.success,
+            #                            'collision_num': self.collision_num,
+            #                            'last_timestep_states': self.unsafe_states}  # don't need to define reward because it's irl
             return obv, reward, done, {'success': self.success,
                                        'collision_num': self.collision_num}  # don't need to define reward because it's irl
 

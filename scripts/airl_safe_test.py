@@ -32,7 +32,7 @@ def parse_args():
     # parser.add_argument('--eval_num', type=int, required=False, default=100)
     # parser.add_argument('--gpu', type=str, default='0')
     parser.add_argument('--demo_path', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
-    parser.add_argument('--policy_path', type=str, default='data/combine_1_2/v1/share')
+    parser.add_argument('--policy_path', type=str, default='data/comb/1_cbf_init_single/share')
     args = parser.parse_args()
     return args
 
@@ -74,7 +74,7 @@ for traj in demonstrations:
         traj['observations'][i] = traj['observations'][i].flatten()
 env = GymEnv(carEnv(demo=demo_pth), max_episode_length=1000)
 
-demonstrations = [demonstrations[:NUM_DEMO_USED]]
+demonstrations = demonstrations[:NUM_DEMO_USED]
 
 
 
@@ -82,16 +82,16 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     save_dictionary = {}
-    for index in range(len(demonstrations)):
-        policy = GaussianMLPPolicy(name=f'action',
-                                   env_spec=env.spec,
-                                   hidden_sizes=(32, 32))
-        for idx, var in enumerate(
-            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                              scope=f'action')):
-            save_dictionary[f'action_{index}_{idx}'] = var
 
-        policies.append(policy)
+    policy = GaussianMLPPolicy(name=f'action',
+                               env_spec=env.spec,
+                               hidden_sizes=(32, 32))
+    for idx, var in enumerate(
+        tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                          scope=f'action')):
+        save_dictionary[f'action_{idx}'] = var
+
+    policies.append(policy)
 
     saver = tf.train.Saver(save_dictionary)
     saver.restore(sess, f"{log_path}/model")
@@ -108,6 +108,7 @@ with tf.Session(config=config) as sess:
     video_traj_num = 10
 
     coll_ls, succ_ls = [], []
+    last_timestep_state_ls = []
     while traj_cnt < EVAL_TRAJ_NUM:
         if not done:
             ob, rew, done, info = env_test.step(policy.get_action(ob)[0])
@@ -119,6 +120,7 @@ with tf.Session(config=config) as sess:
             coll_ls.append(info['collision_num'])
             coll_cnt = coll_cnt + info['collision_num']
             succ_cnt = succ_cnt + info['success']
+            last_timestep_state_ls += env_test.unsafe_states
             ob = env_test.reset()
             done = False
 
