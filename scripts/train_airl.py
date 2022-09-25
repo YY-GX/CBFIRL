@@ -39,7 +39,7 @@ def parse_args():
     now = datetime.now()
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
-    parser.add_argument('--epoch_num', type=int, required=False, default=400)
+    parser.add_argument('--epoch_num', type=int, required=False, default=200)
     parser.add_argument('--share_pth', type=str, default=None)
     parser.add_argument('--airl_pth', type=str, default=None)
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')

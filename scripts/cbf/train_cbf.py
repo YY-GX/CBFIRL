@@ -173,14 +173,14 @@ def build_training_graph(num_agents, env, policy, goal_reaching_weight=0.1):
     #     s=s, g=g, a=a, r=config.DIST_MIN_THRES, ttc=config.TIME_TO_COLLISION)
 
 
-    # # TODO: Add reward loss [r(s, a)]
+    # # yy: Add reward loss [r(s, a)]
     # a_reward_input = tf.reshape(a[-1, :], [1, 2])
     # rew_input = tf.concat([obv, a_reward_input], axis=1)
     # with tf.variable_scope('reward'):
     #     loss_reward = tf.reduce_sum(-relu_net(rew_input))
 
 
-    # TODO: Add reward loss [r(T(s, pi(s)))]
+    # yy: Add reward loss [r(T(s, pi(s)))]
     dsdt = tf.concat([tf.reshape(s[-1, 2:], (1, 2)), tf.reshape(a[-1, :], (1, 2))], axis=1)  # YY: dsdt = [vx, vy, ax, ay]
     agent_state = tf.reshape((s[-1, :] + dsdt * config.TIME_STEP), (1, 4))
     rew_input = tf.concat([obv_next[:, :-4], agent_state], axis=1)

@@ -6,7 +6,7 @@ Results:
     RiseTime: itr 13
 """
 import numpy as np
-
+# btw, you mentioned that you train two obj
 from envs.carEnv import carEnv
 # from envs.carEnv_garage import carEnv
 import os
@@ -29,23 +29,52 @@ import pickle
 import dowel
 from dowel import logger, tabular
 import argparse
-
+from garage.experiment import deterministic
 import envs.config as config_file
 import os
+
+import random
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    now = datetime.now()
-    main_pth = 'data/comb/2_cbf_deriv'
+
+    # 16 obs
+    main_pth = 'data/comb/16obs_airl_cbf_del'
+    # main_pth = 'data/comb/baselines_repro_1'
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
-    parser.add_argument('--epoch_num', type=int, required=False, default=200)
+    parser.add_argument('--epoch_num', type=int, required=False, default=201)
+    parser.add_argument('--lr_cbf', type=float, required=False, default=1e-4)
+    parser.add_argument('--start_cbf_epoch', type=int, required=False, default=-1)
+    parser.add_argument('--cbf_freq', type=int, required=False, default=1)
+    parser.add_argument('--num_states_for_training_each_iter', type=int, required=False, default=256)
+    parser.add_argument('--seed', type=int, required=False, default=0)
+
+
     parser.add_argument('--log_pth', type=str, default=main_pth + "/log")
     parser.add_argument('--share_pth', type=str, default=main_pth + "/share")
     parser.add_argument('--airl_pth', type=str, default=main_pth + "/airl")
+    parser.add_argument('--cbf_pth', type=str, default=main_pth + "/cbf")
+    # parser.add_argument('--restore_pth', type=str, default="data/comb/baselines/airl")
+    parser.add_argument('--restore_pth', type=str, default="data/comb/baselines_repro_1/airl")
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
+    # parser.add_argument('--topk', type=int, required=False, default=3)
     parser.add_argument('--gpu', type=str, default='0')
+
+    # # simple case
+    # main_pth = 'data/simple/airl_cbf_debug'
+    # parser.add_argument('--fusion_num', type=int, required=False, default=2000)
+    # parser.add_argument('--demo_num', type=int, required=False, default=1000)
+    # parser.add_argument('--epoch_num', type=int, required=False, default=20)
+    # parser.add_argument('--log_pth', type=str, default=main_pth + "/log")
+    # parser.add_argument('--share_pth', type=str, default=main_pth + "/share")
+    # parser.add_argument('--airl_pth', type=str, default=main_pth + "/airl")
+    # parser.add_argument('--cbf_pth', type=str, default=main_pth + "/cbf")
+    # parser.add_argument('--demo_pth', type=str, default='src/demonstrations/simple_3obs.pkl')
+    # parser.add_argument('--gpu', type=str, default='0')
+
     args = parser.parse_args()
     return args
 
@@ -59,30 +88,37 @@ def demo_remove_top_k(demos, topk):
     return demos
 
 
+def initialize_uninitialized(sess):
+    global_vars = tf.global_variables()
+    is_initialized = sess.run([tf.is_variable_initialized(var) for var in global_vars])
+    not_initialized_vars = [v for (v, f) in zip(global_vars, is_initialized) if not f]
 
+    # print(str(i.name) for i in not_initialized_vars)  # only for testing
+    if len(not_initialized_vars):
+        sess.run(tf.variables_initializer(not_initialized_vars))
 
 
 
 args = parse_args()
 
+# Set seeds
+seed = args.seed
+deterministic.set_seed(seed)
+
 # GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)
-config.gpu_options.allow_growth = True
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+config = tf.ConfigProto(device_count={'GPU': 0}, allow_soft_placement=True, log_device_placement=False)
 
-
+# params
 log_path = args.log_pth
 share_path = args.share_pth  # reward and action params
 airl_path = args.airl_pth
-
-
-
-
-
-# params
+restore_pth = args.restore_pth
 NUM_DEMO_USED = args.demo_num
 EPOCH_NUM = args.epoch_num
 demo_pth = args.demo_pth
+cbf_freq = args.cbf_freq
+num_states_for_training_each_iter = args.num_states_for_training_each_iter
 
 
 # YY: Load demonstrations and create environment
@@ -126,7 +162,12 @@ with tf.Session(config=config) as sess:
                      name=f'skill',
                      fusion_num=args.fusion_num,
                      policy=policy,
-                     log_path=log_path)
+                     log_path=log_path,
+                     env_eval=carEnv(demo=demo_pth, is_test=True),
+                     lr_cbf=args.lr_cbf,
+                     start_cbf_epoch=args.start_cbf_epoch,
+                     cbf_freq=cbf_freq,
+                     num_states_for_training_each_iter=num_states_for_training_each_iter)
 
     # Add airl params
     for idx, var in enumerate(
@@ -149,16 +190,17 @@ with tf.Session(config=config) as sess:
         save_dictionary_share[f'reward_{idx}'] = var
 
     # restore policy and airl
-    if os.path.exists(airl_path):
+    if os.path.exists(restore_pth):
         saver = tf.train.Saver(save_dictionary_airl)
-        saver.restore(sess, f"{airl_path}/model")
+        saver.restore(sess, f"{restore_pth}/model")
 
 
 
-    sess.run(tf.global_variables_initializer())
+    # sess.run(tf.global_variables_initializer())
+    initialize_uninitialized(tf.get_default_session())
 
     # Restore CBF NN
-    cbf_path = "data/comb/2_cbf_init_single/cbf"
+    cbf_path = args.cbf_pth
     save_dictionary_cbf = {}
     for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -197,9 +239,10 @@ with tf.Session(config=config) as sess:
 
     # Training
     sampler = RaySampler(agents=policy,
-                           envs=env,
-                           max_episode_length=env.spec.max_episode_length,
-                           is_tf_worker=True)
+                        envs=env,
+                        max_episode_length=env.spec.max_episode_length,
+                        is_tf_worker=True,
+                        seed=seed)
     algo._sampler = sampler
 
     logger.remove_all()
@@ -217,3 +260,10 @@ with tf.Session(config=config) as sess:
     saver_airl = tf.train.Saver(save_dictionary_airl)
     saver_airl.save(sess, f"{airl_path}/model")
 
+    # save unsafe states
+    with open("src/demonstrations/unsafe_classified_debug.pkl", 'wb') as f:
+        pickle.dump(irl_model.unsafe_states_ls, f)
+
+
+# os.system("python scripts/airl_safe_test_simple.py --demo_path " + args.demo_pth + " --policy_path " + share_path)
+# os.system("python scripts/airl_safe_test.py --demo_path " + args.demo_pth + " --policy_path " + share_path)

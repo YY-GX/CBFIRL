@@ -55,7 +55,8 @@ class RaySampler(Sampler):
             max_episode_length=None,
             is_tf_worker=False,
             seed=get_seed(),
-            n_workers=psutil.cpu_count(logical=False),
+            # n_workers=psutil.cpu_count(logical=False),  # yy: this will make it hard to reproduce
+            n_workers=1,
             worker_class=DefaultWorker,
             worker_args=None):
         # pylint: disable=super-init-not-called

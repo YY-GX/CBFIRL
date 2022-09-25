@@ -22,6 +22,12 @@ from garage.experiment import Snapshotter
 import pickle
 from tensorflow.python.tools.inspect_checkpoint import print_tensors_in_checkpoint_file
 import argparse
+from garage.experiment import deterministic
+
+
+# Set seeds
+seed = 0
+deterministic.set_seed(seed)
 
 
 def parse_args():
@@ -32,26 +38,20 @@ def parse_args():
     # parser.add_argument('--eval_num', type=int, required=False, default=100)
     # parser.add_argument('--gpu', type=str, default='0')
     parser.add_argument('--demo_path', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
-    parser.add_argument('--policy_path', type=str, default='data/comb/1_cbf_init_single/share')
+    parser.add_argument('--policy_path', type=str, default='data/comb/16obs_airl_cbf_h23/share')
     args = parser.parse_args()
     return args
+# 'data/comb/16obs_airl_cbf_debug/share'
 
 args = parse_args()
+log_path = args.policy_path
+demo_pth = args.demo_path
 
 # YY: params
-NUM_DEMO_USED = 1000
-EPOCH_NUM = 1500
 EVAL_TRAJ_NUM = 100
 
-now = datetime.now()
-
-log_path = f"data/saved_cbf_policies/24_07_2022_23_29_23"  # r(s, a)
-log_path = f"data/saved_cbf_policies/25_07_2022_21_16_22"  # no reward loss added
-log_path = f"data/saved_cbf_policies/25_07_2022_21_59_46"  # r(T(s, \pi(s)))
-log_path = f"data/saved_cbf_policies/28_07_2022_16_59_37"
 
 
-log_path = args.policy_path
 
 irl_models = []
 policies = []
@@ -59,24 +59,9 @@ algos = []
 trainers = []
 
 
-demo_pth = args.demo_path
 
 
-# YY: Load demonstrations and create environment
-with open(demo_pth, 'rb') as f:
-    demonstrations = pickle.load(f)
-
-# YY: only retain agent's actions
-for traj in demonstrations:
-    for i, a in enumerate(traj['actions']):
-        traj['actions'][i] = a[-1, :]
-    for i, o in enumerate(traj['observations']):
-        traj['observations'][i] = traj['observations'][i].flatten()
 env = GymEnv(carEnv(demo=demo_pth), max_episode_length=1000)
-
-demonstrations = demonstrations[:NUM_DEMO_USED]
-
-
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -97,7 +82,7 @@ with tf.Session(config=config) as sess:
     saver.restore(sess, f"{log_path}/model")
 
     # Evaluation
-    env_test = carEnv(demo=demo_pth)  # YY
+    env_test = carEnv(demo=demo_pth, is_test=True)  # YY
     env_test.render('no_vis')
 
     imgs = []
@@ -131,6 +116,7 @@ with tf.Session(config=config) as sess:
     print(succ_ls)
     with open(log_path + "/eval_results.txt", 'w', encoding='utf-8') as f:
         f.write(">> Success traj num: " + str(succ_cnt) + ", Collision traj num: " + str(coll_cnt) + " out of " + str(EVAL_TRAJ_NUM) + " trajs.\n")
-        f.write(str(np.mean(coll_ls)) + ', ' + str(np.std(coll_ls)))
+        f.write(str(np.mean(coll_ls)) + ', ' + str(np.std(coll_ls)) + '\n')
+        f.write(str(coll_ls))
 
-    save_video(imgs, os.path.join(f"{log_path}/policy_videos/skill_0_eval.avi"))
+    save_video(imgs, os.path.join(f"{log_path}/policy_videos/eval.avi"))

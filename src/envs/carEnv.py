@@ -15,14 +15,18 @@ from garage.tf.policies import GaussianMLPPolicy
 from garage.envs import GymEnv
 
 class carEnv(Env):
-    def __init__(self, demo='src/demonstrations/safe_demo_better.pkl', seed=10, is_hundred=False):
+    def __init__(self, demo='src/demonstrations/safe_demo_better.pkl', seed=10, is_hundred=False, is_test=False):
         super(carEnv, self).__init__()
 
-        random.seed(seed)
+        # random.seed(seed)
 
         # read demonstrations
         with open(demo, 'rb') as f:
             self.demonstrations = pickle.load(f)
+            # if is_test:
+            #     self.demonstrations = self.demonstrations[500:]  # yy: use last 500 for testing
+            # else:
+            #     self.demonstrations = self.demonstrations[:500]  # yy: use first 500 for training
 
         obs_num = self.demonstrations[0]['observations'][0].shape[0]
 
@@ -56,6 +60,8 @@ class carEnv(Env):
         # special setting for 100 per
         self.is_hundred = is_hundred
 
+        self.collision_flag = False
+
 
 
 
@@ -66,7 +72,8 @@ class carEnv(Env):
         self.collision_num = 0
         self.timestep = 0
         self.step_num = 0
-        self.__traj_id = random.choice(range(len(self.demonstrations)))
+        id = random.choice(range(len(self.demonstrations)))
+        self.__traj_id = id
         self.traj = self.demonstrations[self.__traj_id]
         start_state, self.goal_state = self.traj['observations'][0], self.traj['observations'][-1][-1, :]
         self.agent_state, self.obs_state = start_state[-1, :], start_state[:-1, :]
@@ -131,13 +138,18 @@ class carEnv(Env):
             # done = True
             # self.agent_state[2:] = 0
             self.success = 1
+            self.collision_flag = False
 
         elif not np.all(np.linalg.norm(self.obs_state[:, :2] - self.agent_state[:2], axis=1) > config.DIST_MIN_CHECK):
             # print("Collision detected!")
             # done = True
             # idx = np.where(np.linalg.norm(self.obs_state[:, :2] - self.agent_state[:2], axis=1) > config.DIST_MIN_CHECK == False)
             # self.unsafe_states.append((np.concatenate([last_timestep_obs_state, last_timestep_agent_state[None, :]], axis=0), idx))
-            self.collision_num += 1
+            if not self.collision_flag:
+                self.collision_num += 1
+                self.collision_flag = True
+        else:
+            self.collision_flag = False
 
         if self.is_vis:
             self.draw_fig()

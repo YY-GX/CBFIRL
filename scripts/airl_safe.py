@@ -36,7 +36,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
-    parser.add_argument('--epoch_num', type=int, required=False, default=400)
+    parser.add_argument('--epoch_num', type=int, required=False, default=200)
     parser.add_argument('--eval_num', type=int, required=False, default=10)
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
     parser.add_argument('--gpu', type=str, default='0')
