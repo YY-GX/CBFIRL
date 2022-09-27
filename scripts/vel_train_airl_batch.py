@@ -19,7 +19,7 @@ from garage.experiment.deterministic import set_seed
 from garage.np.baselines import LinearFeatureBaseline
 from garage.sampler import RaySampler, MultiprocessingSampler
 from airl.irl_trpo import TRPO
-from models.vel_airl_state import AIRL
+from models.vel_airl_state_batch import AIRL
 
 from garage.tf.policies import GaussianMLPPolicy
 from garage.trainer import Trainer
@@ -47,9 +47,10 @@ def parse_args():
     # AIRL related params
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
-    parser.add_argument('--epoch_num', type=int, required=False, default=201)
+    parser.add_argument('--epoch_num', type=int, required=False, default=40)
 
     # CBF related param
+    parser.add_argument('--cbf_weight', type=float, required=False, default=0)
     parser.add_argument('--start_cbf_epoch', type=int, required=False, default=10000)
     parser.add_argument('--lr_cbf', type=float, required=False, default=1e-4)
     parser.add_argument('--cbf_freq', type=int, required=False, default=1)
@@ -59,10 +60,9 @@ def parse_args():
     parser.add_argument('--log_pth', type=str, default=main_pth + "/log")
     parser.add_argument('--share_pth', type=str, default=main_pth + "/share")
     parser.add_argument('--airl_pth', type=str, default=main_pth + "/airl")
-    parser.add_argument('--cbf_pth', type=str, default=main_pth + "/cbf")
+    parser.add_argument('--cbf_pth', type=str, default="data/new_vel/baselines/cbf")
     parser.add_argument('--restore_pth', type=str, default='data/new_vel/baselines/airl')
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
-    # parser.add_argument('--topk', type=int, required=False, default=3)
 
     args = parser.parse_args()
     return args
@@ -179,10 +179,10 @@ with tf.Session(config=config) as sess:
 
         save_dictionary_share[f'reward_{idx}'] = var
 
-    # restore policy and airl
-    if os.path.exists(restore_pth):
-        saver = tf.train.Saver(save_dictionary_airl)
-        saver.restore(sess, f"{restore_pth}/model")
+    # # restore policy and airl
+    # if os.path.exists(restore_pth):
+    #     saver = tf.train.Saver(save_dictionary_airl)
+    #     saver.restore(sess, f"{restore_pth}/model")
 
 
 
@@ -194,7 +194,7 @@ with tf.Session(config=config) as sess:
     save_dictionary_cbf = {}
     for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                              scope=f'cbf')):
+                              scope=f'skill/cbf')):
         save_dictionary_cbf[f'cbf_{idx}'] = var
     print(">> Length of save_dictionary_cbf: ", len(save_dictionary_cbf))
     # print([n.name for n in tf.get_default_graph().as_graph_def().node])
@@ -250,9 +250,9 @@ with tf.Session(config=config) as sess:
     saver_airl = tf.train.Saver(save_dictionary_airl)
     saver_airl.save(sess, f"{airl_path}/model")
 
-    # save unsafe states
-    with open("src/demonstrations/unsafe_classified_debug.pkl", 'wb') as f:
-        pickle.dump(irl_model.unsafe_states_ls, f)
+    # # save unsafe states
+    # with open("src/demonstrations/unsafe_classified_debug.pkl", 'wb') as f:
+    #     pickle.dump(irl_model.unsafe_states_ls, f)
 
 
 # os.system("python scripts/airl_safe_test_simple.py --demo_path " + args.demo_pth + " --policy_path " + share_path)

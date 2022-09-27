@@ -38,7 +38,7 @@ def parse_args():
     # parser.add_argument('--eval_num', type=int, required=False, default=100)
     # parser.add_argument('--gpu', type=str, default='0')
     parser.add_argument('--demo_path', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
-    parser.add_argument('--policy_path', type=str, default='data/vel/just_airl/share')
+    parser.add_argument('--policy_path', type=str, default='data/new_vel/baselines/share')
     args = parser.parse_args()
     return args
 # 'data/comb/16obs_airl_cbf_debug/share'

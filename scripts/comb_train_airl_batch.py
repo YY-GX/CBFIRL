@@ -7,7 +7,7 @@ Results:
 """
 import numpy as np
 # btw, you mentioned that you train two obj
-from envs.carEnv_vel import carEnv
+from envs.carEnv import carEnv
 # from envs.carEnv_garage import carEnv
 import os
 from datetime import datetime
@@ -19,7 +19,7 @@ from garage.experiment.deterministic import set_seed
 from garage.np.baselines import LinearFeatureBaseline
 from garage.sampler import RaySampler, MultiprocessingSampler
 from airl.irl_trpo import TRPO
-from models.vel_airl_state import AIRL
+from models.comb_airl_state_batch import AIRL
 
 from garage.tf.policies import GaussianMLPPolicy
 from garage.trainer import Trainer
@@ -39,30 +39,31 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    main_pth = 'data/new_vel/baselines'
 
-    parser.add_argument('--seed', type=int, required=False, default=0)
+    main_pth = 'data/new_comb/100_unfreeze1'
+
+    # Basics
     parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('--seed', type=int, required=False, default=0)
 
-    # AIRL related params
+    # AIRL params
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
     parser.add_argument('--epoch_num', type=int, required=False, default=201)
 
-    # CBF related param
-    parser.add_argument('--start_cbf_epoch', type=int, required=False, default=10000)
-    parser.add_argument('--lr_cbf', type=float, required=False, default=1e-4)
-    parser.add_argument('--cbf_freq', type=int, required=False, default=1)
-    parser.add_argument('--num_states_for_training_each_iter', type=int, required=False, default=256)
+    # CBF params
+    parser.add_argument('--cbf_weight', type=float, required=False, default=5e-7)
+    parser.add_argument('--is_freeze_discriminator', type=bool, default=False)
 
-    # Log params
+    # log params
     parser.add_argument('--log_pth', type=str, default=main_pth + "/log")
     parser.add_argument('--share_pth', type=str, default=main_pth + "/share")
     parser.add_argument('--airl_pth', type=str, default=main_pth + "/airl")
-    parser.add_argument('--cbf_pth', type=str, default=main_pth + "/cbf")
-    parser.add_argument('--restore_pth', type=str, default='data/new_vel/baselines/airl')
+    parser.add_argument('--cbf_pth', type=str, default="data/new_comb/baselines/cbf")
+    parser.add_argument('--is_restore', type=bool, default=True)
+    parser.add_argument('--restore_pth', type=str, default="data/new_comb/baselines_100ts/airl")
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
-    # parser.add_argument('--topk', type=int, required=False, default=3)
+
 
     args = parser.parse_args()
     return args
@@ -106,17 +107,12 @@ restore_pth = args.restore_pth
 NUM_DEMO_USED = args.demo_num
 EPOCH_NUM = args.epoch_num
 demo_pth = args.demo_pth
-cbf_freq = args.cbf_freq
-num_states_for_training_each_iter = args.num_states_for_training_each_iter
 
+cbf_weight = args.cbf_weight
 
 # YY: Load demonstrations and create environment
 with open(demo_pth, 'rb') as f:
     demonstrations = pickle.load(f)
-    # Only use pos
-    for i, demo in enumerate(demonstrations):
-        demo['observations'] = [ob[:, :2] for ob in demo['observations']]
-        demonstrations[i] = demo
 
 demonstrations = demo_remove_top_k(demonstrations, config_file.TOP_K)
 
@@ -137,6 +133,9 @@ with tf.Session(config=config) as sess:
     save_dictionary_share = {}
     save_dictionary_airl = {}
 
+
+
+
     snapshotter = Snapshotter(f'{share_path}/skill')
     trainer = Trainer(snapshotter)
 
@@ -154,10 +153,8 @@ with tf.Session(config=config) as sess:
                      policy=policy,
                      log_path=log_path,
                      env_eval=carEnv(demo=demo_pth, is_test=True),
-                     lr_cbf=args.lr_cbf,
-                     start_cbf_epoch=args.start_cbf_epoch,
-                     cbf_freq=cbf_freq,
-                     num_states_for_training_each_iter=num_states_for_training_each_iter)
+                     cbf_weight=cbf_weight,
+                     is_freeze_discriminator=args.is_freeze_discriminator)
 
     # Add airl params
     for idx, var in enumerate(
@@ -179,12 +176,13 @@ with tf.Session(config=config) as sess:
 
         save_dictionary_share[f'reward_{idx}'] = var
 
-    # restore policy and airl
-    if os.path.exists(restore_pth):
-        saver = tf.train.Saver(save_dictionary_airl)
-        saver.restore(sess, f"{restore_pth}/model")
 
-
+    if args.is_restore:
+        # restore policy and airl
+        if os.path.exists(restore_pth):
+            print(">> AIRL restore path exist!")
+            saver = tf.train.Saver(save_dictionary_airl)
+            saver.restore(sess, f"{restore_pth}/model")
 
     # sess.run(tf.global_variables_initializer())
     initialize_uninitialized(tf.get_default_session())
@@ -194,7 +192,7 @@ with tf.Session(config=config) as sess:
     save_dictionary_cbf = {}
     for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                              scope=f'cbf')):
+                              scope=f'skill/cbf')):
         save_dictionary_cbf[f'cbf_{idx}'] = var
     print(">> Length of save_dictionary_cbf: ", len(save_dictionary_cbf))
     # print([n.name for n in tf.get_default_graph().as_graph_def().node])
@@ -250,9 +248,9 @@ with tf.Session(config=config) as sess:
     saver_airl = tf.train.Saver(save_dictionary_airl)
     saver_airl.save(sess, f"{airl_path}/model")
 
-    # save unsafe states
-    with open("src/demonstrations/unsafe_classified_debug.pkl", 'wb') as f:
-        pickle.dump(irl_model.unsafe_states_ls, f)
+    # # save unsafe states
+    # with open("src/demonstrations/unsafe_classified_debug.pkl", 'wb') as f:
+    #     pickle.dump(irl_model.unsafe_states_ls, f)
 
 
 # os.system("python scripts/airl_safe_test_simple.py --demo_path " + args.demo_pth + " --policy_path " + share_path)

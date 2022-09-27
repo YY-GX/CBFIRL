@@ -163,12 +163,6 @@ class GaussianMLPPolicy(GaussianMLPModel, Policy):
             ],
             feed_list=[state_input])
 
-        # yy: added by me
-        # self.hhhh = None
-        # self.cbf_action = tf.reshape(dist.sample(seed=deterministic.get_tf_seed_stream()), [1, 2])  #tf.reshape(self.action_space.unflatten_n(np.squeeze(, 1)), [1, 2])
-        # self.cbf_state_input = state_input
-        # return tf.reshape(dist.sample(seed=deterministic.get_tf_seed_stream()), [1, 2]), state_input
-
     @property
     def input_dim(self):
         """int: Dimension of the policy input."""

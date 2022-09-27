@@ -33,7 +33,8 @@ class carEnv(Env):
         observation_shape = ((min(obs_num, config.TOP_K + 1)) * 2,)
         self.observation_space = spaces.Box(low=0, high=float('inf'), shape=observation_shape)
         # action_space: (vx, vy)
-        self.action_space = spaces.Box(low=-float('inf'), high=0.9, shape=(2,))  # add a high limit to velocity
+        # self.action_space = spaces.Box(low=-float('inf'), high=0.15, shape=(2,))  # add a high limit to velocity
+        self.action_space = spaces.Box(low=np.array([-float('inf'), -float('inf')]), high=np.array([0.15, 0.15]))  # add a high limit to velocity
 
         # initialize the states of agent and obs
         self.agent_state = None
@@ -98,6 +99,10 @@ class carEnv(Env):
         self.step_num += 1
         if self.timestep >= len(self.traj['observations']):
             self.timestep = len(self.traj['observations']) - 1
+
+        # yy: Strictly limit the high value in action
+        high_val_limit = 0.3
+        action = np.array([min(action[0], high_val_limit), min(action[1], high_val_limit)])
 
         # step of the agent
         dsdt = action  # YY: dsdt = [vx, vy]

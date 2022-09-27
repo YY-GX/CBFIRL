@@ -57,8 +57,8 @@ def show_safe_demo():
 
 
 def show_unsafe_demo():
-    with open('src/demonstrations/unsafe_classified_debug.pkl', 'rb') as f:
-        S_u = pickle.load(f)
+    with open('src/demonstrations/unsafe_states_vel_top12.pkl', 'rb') as f:
+        S_u, _ = pickle.load(f)
     random.shuffle(S_u)
 
     # with open('src/demonstrations/unsafe_states_16obs_close.pkl', 'rb') as f:
@@ -115,30 +115,47 @@ def show_unsafe_demo():
     #        [1.1028e+00, 9.8173e-01, 1.0365e-01, 4.5295e-03],
     #        [1.2564e-02, 1.7708e-01, 3.0930e-02, 7.9221e-01]])
 
+    s_ = np.array([[1.2132, 0.6727, -0.0084, -0.0141],
+                      [0.9607, 0.6837, -0.0153, 0.1246],
+                      [0.8423, 1.1289, -0.0711, -0.0384],
+                      [0.9398, 1.2857, 0.0735, -0.0497],
+                      [1.7411, 0.9739, 0.1093, -0.0915],
+                      [1.6691, 0.3678, 0.0378, -0.0756],
+                      [1.4384, 0.1674, 0.0192, 0.0164],
+                      [1.1022, 0.0538, 0.1072, 0.0047],
+                      [0.5425, 0.1114, 0.1402, 0.0301],
+                      [0.1919, 0.5605, 0.0043, 0.1608],
+                      [0.3556, 0.1575, -0.0851, -0.1306],
+                      [0.0709, 1.2817, 0.0218, 0.0156]])
 
-    # simple
-    s_ = np.array([[0.7162, 0.7162, 0., 0.],
-              [0.4775, 0.4775, 0., 0.],
-              [0.2387, 0.2387, 0., 0.],
-              [7.9114, 5.1217, 3.7491, 2.3693]])
-
-
+    # # simple
+    # s_ = np.array([[0.7162, 0.7162, 0., 0.],
+    #           [0.4775, 0.4775, 0., 0.],
+    #           [0.2387, 0.2387, 0., 0.],
+    #           [7.9114, 5.1217, 3.7491, 2.3693]])
+    #
+    #
     S_u = [s_]
 
 
 
 
 
-    for i, s_u in enumerate(S_u):
+    for i, s_u in enumerate(S_u[:10]):
         # s_u = s_u[0]
-        print(np.array(s_u))
-        if s_u.shape[0] == 0:
-            continue
+
+
+
+        # print(np.array(s_u))
+        # if s_u.shape[0] == 0:
+        #     continue
+        # print(s_u)
         plt.clf()
-        v1, v2 = s_u[-1, 2], s_u[-1, 3]
-        v1 /= max(np.abs(v1), np.abs(v2))
-        v2 /= max(np.abs(v1), np.abs(v2))
-        plt.arrow(s_u[-1, 0], s_u[-1, 1], v1, v2)
+        # v1, v2 = s_u[-1, 2], s_u[-1, 3]
+        # v1 /= max(np.abs(v1), np.abs(v2))
+        # v2 /= max(np.abs(v1), np.abs(v2))
+        # plt.arrow(s_u[-1, 0], s_u[-1, 1], v1, v2)
+
         # show the dynamic obstacles
         plt.scatter(s_u[:-1, 0], s_u[:-1, 1],
                     color='darkorange',
@@ -151,7 +168,7 @@ def show_unsafe_demo():
         plt.xlim(-0.0, 1.5)
         plt.ylim(-0.0, 1.5)
 
-        plt.savefig('data/visual_videos/h_visualize/1_real_simple.png')
+        plt.savefig('data/visual_videos/h_visualize/new_vel_ori_v2.png')
 
         plt.pause(1)
 
@@ -531,7 +548,7 @@ def visualize_h_value_vel():
         sess.run(tf.global_variables_initializer())
 
         # Restore CBF NN
-        cbf_path = "data/vel/baselines/cbf"
+        cbf_path = "data/new_vel/baselines_bigger_region/cbf"
         # cbf_path = "data/comb/baselines_repro_1/cbf"
         save_dictionary_cbf = {}
         for idx, var in enumerate(
@@ -546,14 +563,29 @@ def visualize_h_value_vel():
         # visualize state
 
         # 1
-        s_obs = np.array([[ 0.4282,  0.2759],
-                           [ 1.0574, -0.0631],
-                           [ 0.7586,  0.3175]])
+        # s_obs = np.array([[ 0.4282,  0.2759],
+        #                    [ 1.0574, -0.0631],
+        #                    [ 0.7586,  0.3175]])
+
+
+        s_obs = np.array([[1.2132, 0.6727, -0.0084, -0.0141],
+                       [0.9607, 0.6837, -0.0153, 0.1246],
+                       [0.8423, 1.1289, -0.0711, -0.0384],
+                       [0.9398, 1.2857, 0.0735, -0.0497],
+                       [1.7411, 0.9739, 0.1093, -0.0915],
+                       [1.6691, 0.3678, 0.0378, -0.0756],
+                       [1.4384, 0.1674, 0.0192, 0.0164],
+                       [1.1022, 0.0538, 0.1072, 0.0047],
+                       [0.5425, 0.1114, 0.1402, 0.0301],
+                       [0.1919, 0.5605, 0.0043, 0.1608],
+                       [0.3556, 0.1575, -0.0851, -0.1306],
+                       [0.0709, 1.2817, 0.0218, 0.0156]])
+        s_obs = s_obs[:, :2]
+
 
 
         fig = plt.figure(figsize=(12, 9))
         h_ls_ls = []
-        v = np.array([1, 1])
 
         for idx, i in enumerate(np.linspace(0, 1.5, 150)):
             if idx % 10 == 0:
@@ -569,7 +601,7 @@ def visualize_h_value_vel():
         ax = sns.heatmap(np.array(h_ls_ls))
         ax.invert_yaxis()
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/h_visualize/vel.png')
+        plt.savefig('data/visual_videos/new_h_visual/new_comb_cbf_bigger.png')
 
 
 if __name__ == "__main__":
