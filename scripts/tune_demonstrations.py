@@ -2,7 +2,7 @@ import pickle
 import numpy as np
 import envs.config as config
 
-with open('src/demonstrations/safe_demo_16obs.pkl', 'rb') as f:
+with open('src/demonstrations/16obs_acc_farther_target.pkl', 'rb') as f:
     demonstrations = pickle.load(f)
 
 print(len(demonstrations))
@@ -20,7 +20,7 @@ for traj in demonstrations:
             traj['observations'].append(supple_ob)
             traj['actions'].append(supple_ac)
 
-with open('src/demonstrations/safe_demo_16obs_stop.pkl', 'wb') as f:
+with open('src/demonstrations/16obs_acc_farther_target.pkl', 'wb') as f:
     pickle.dump(demonstrations, f)
 
 

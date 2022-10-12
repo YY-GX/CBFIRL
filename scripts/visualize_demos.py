@@ -20,21 +20,26 @@ from global_utils.utils import *
 import random
 
 from models.vel_cbf import build_training_graph_init
+from models.comb_cbf import build_training_graph_init as build_training_graph_init_4state
+
 
 def show_safe_demo():
     demo_pth = 'src/demonstrations/safe_demo_16obs_stop.pkl'
+    demo_pth = 'src/demonstrations/16obs_acc_farther_target.pkl'
+
     # Get agent's traj's actions
     with open(demo_pth, 'rb') as f:
         demonstrations = pickle.load(f)
     imgs = []
-    for i in range(10, 12):
+    for i in range(0, 10):
         env = carEnv(demo=demo_pth, seed=i)
-        # yy: velocity demo
-        env = carEnv_vel(demo=demo_pth, seed=i)
+        # # yy: velocity demo
+        # env = carEnv_vel(demo=demo_pth, seed=i)
         env.reset()
-        agent_actions = demonstrations[env.get_traj_id()]['actions']
-        # yy: velocity actions
-        agent_actions = [ob[:, 2:] for ob in demonstrations[env.get_traj_id()]['observations']]
+        # agent_actions = demonstrations[env.get_traj_id()]['actions']
+        agent_actions = demonstrations[i]['actions']
+        # # yy: velocity actions
+        # agent_actions = [ob[:, 2:] for ob in demonstrations[env.get_traj_id()]['observations']]
 
         tm = 0
         env.render('no_vis')
@@ -50,9 +55,10 @@ def show_safe_demo():
                 break
     
             tm += 1
-    
+
+        print(tm)
         env.close()
-    save_video(imgs, f"data/visual_videos/demo/demo_16obs_vel.avi")
+    save_video(imgs, f"data/visual_videos/demo/16_farther_target.avi")
         
 
 
@@ -279,6 +285,7 @@ def visualize_learned_reward():
     log_path = 'data/yy/01_08_2022_23_58_24'  # r(s) stop
 
     log_path = 'data/vel/baselines/share'  # r(s) stop
+    log_path = 'data/new_comb/j3/share'
 
 
     # log_path = f'data/obs16/03_08_2022_16_26_14'  # r(s) -> 1000 epoch
@@ -291,7 +298,7 @@ def visualize_learned_reward():
     demo_pth = 'src/demonstrations/safe_demo_16obs_stop.pkl'
     # demo_pth = 'src/demonstrations/safe_demo_stop.pkl'
 
-    dim = 8  # 52
+    dim = 52  # 8  # 52
 
     save_dictionary = {}
     env = GymEnv(carEnv(demo=demo_pth), max_episode_length=50)
@@ -335,12 +342,13 @@ def visualize_learned_reward():
 
 
         NUM_DEMO = 1
-        for i in range(NUM_DEMO):
-            print('Iter ', i)
+        for m in range(NUM_DEMO):
+            print('Iter ', m)
             # yy: old
-            # env = carEnv(demo=demo_pth)
+            env = carEnv(demo=demo_pth)
 
-            env = carEnv_vel(demo=demo_pth)
+            # yy: new
+            # env = carEnv_vel(demo=demo_pth)
 
             obs = env.reset()
             agent_actions = demonstrations[env.get_traj_id()]['actions']
@@ -362,8 +370,9 @@ def visualize_learned_reward():
                 obs, reward, done, info = env.step(action)
 
                 # yy: old
-                # obv_obs = obs[:-4]
-                obv_obs = obs[:-2]
+                obv_obs = obs[:-4]
+                # # yy: new
+                # obv_obs = obs[:-2]
 
                 vis_map = []
 
@@ -371,10 +380,11 @@ def visualize_learned_reward():
                 for i in np.arange(start_obs[1], end_obs[1], 0.1):
                     ls = []
                     for j in np.arange(start_obs[0], end_obs[0], 0.1):
-                        # yy: old
-                        # rew = sess.run(loss_reward, {ph_obv: np.concatenate([obv_obs, np.array([j, i, 0, 0])]), a: action})
-                        rew = sess.run(loss_reward,
-                                       {ph_obv: np.concatenate([obv_obs, np.array([j, i])]), a: action})
+                        # yy: old (vel: (0, 0) here)
+                        rew = sess.run(loss_reward, {ph_obv: np.concatenate([obv_obs, np.array([j, i, 0, 0])]), a: action})
+                        # # yy: new
+                        # rew = sess.run(loss_reward,
+                        #                {ph_obv: np.concatenate([obv_obs, np.array([j, i])]), a: action})
                         ls.append(rew[0][0])
                     vis_map.append(ls)
 
@@ -410,7 +420,7 @@ def visualize_learned_reward():
 
                 tm += 1
 
-            save_video(imgs, f"data/visual_videos/vel/vel_airl.avi", fps=5)
+            save_video(imgs, f"data/visual_videos/new_comb/rewards.avi", fps=5)
 
             env.close()
 
@@ -424,12 +434,13 @@ def visualize_h_value():
 
     with tf.Session() as sess:
         s, dang_mask_reshape, safe_mask_reshape, h, loss, loss_dang, loss_safe, acc_dang, acc_safe, loss_list, acc_list \
-            = build_training_graph_init(num_obs)
+            = build_training_graph_init_4state(num_obs)
         sess.run(tf.global_variables_initializer())
 
         # Restore CBF NN
         cbf_path = "data/comb/16obs_airl_cbf_debug/cbf"
         # cbf_path = "data/simple/airl_cbf_debug/cbf"  # simple
+        cbf_path ="data/new_comb_new_demo/cbf_posx_posy_velx_vely/cbf"
         save_dictionary_cbf = {}
         for idx, var in enumerate(
                 tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -495,7 +506,7 @@ def visualize_h_value():
 
         fig = plt.figure(figsize=(12, 9))
         h_ls_ls = []
-        v = np.array([5e-01, 4e-01])
+        v = np.array([0, 0])
         # v = np.array([0.4953, 0.1285])
         # v = np.array([3.0930e-02, 7.9221e-01])
         # v = np.array([0, 0])
@@ -515,7 +526,7 @@ def visualize_h_value():
         ax = sns.heatmap(np.array(h_ls_ls))
         ax.invert_yaxis()
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/h_visualize/direction_2.png')
+        plt.savefig('data/visual_videos/h_visualize/posposvelvel.png')
 
         # image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
         # image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
@@ -549,6 +560,7 @@ def visualize_h_value_vel():
 
         # Restore CBF NN
         cbf_path = "data/new_vel/baselines_bigger_region/cbf"
+        cbf_path = "data/new_comb_new_demo/cbf_new_demo/cbf"
         # cbf_path = "data/comb/baselines_repro_1/cbf"
         save_dictionary_cbf = {}
         for idx, var in enumerate(
@@ -601,12 +613,17 @@ def visualize_h_value_vel():
         ax = sns.heatmap(np.array(h_ls_ls))
         ax.invert_yaxis()
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/new_h_visual/new_comb_cbf_bigger.png')
+        plt.savefig('data/visual_videos/new_h_visual/new_demo_h.png')
+
+
+
+# def visualize_test_reward():
+
 
 
 if __name__ == "__main__":
     # show_safe_demo()
     # show_unsafe_demo()
     # visualize_learned_reward()
-    # visualize_h_value()
-    visualize_h_value_vel()
+    visualize_h_value()
+    # visualize_h_value_vel()

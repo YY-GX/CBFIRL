@@ -40,30 +40,38 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    main_pth = 'data/new_comb/100_unfreeze1'
+    main_pth = 'data/new_comb_new_demo/just_airl'
 
     # Basics
     parser.add_argument('--gpu', type=str, default='0')
-    parser.add_argument('--seed', type=int, required=False, default=0)
+    parser.add_argument('--seed', type=int, required=False, default=10)
 
     # AIRL params
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
-    parser.add_argument('--epoch_num', type=int, required=False, default=201)
+    parser.add_argument('--epoch_num', type=int, required=False, default=200)
+    parser.add_argument('--generator_train_itrs', type=int, required=False, default=5)
+    parser.add_argument('--policy_ent_coeff', type=float, required=False, default=0.0)
+    parser.add_argument('--max_kl_step', type=float, required=False, default=0.01)
+    parser.add_argument('--ent_method', type=str, required=False, default="regularized")
+
 
     # CBF params
-    parser.add_argument('--cbf_weight', type=float, required=False, default=5e-7)
-    parser.add_argument('--is_freeze_discriminator', type=bool, default=False)
+    parser.add_argument('--cbf_weight', type=float, required=False, default=0)
+    parser.add_argument('--is_freeze_discriminator', type=int, default=0)
+    parser.add_argument('--is_auto_tuning', type=int, default=0)
+    parser.add_argument('--is_use_two_step', type=int, default=1)
+
 
     # log params
     parser.add_argument('--log_pth', type=str, default=main_pth + "/log")
     parser.add_argument('--share_pth', type=str, default=main_pth + "/share")
     parser.add_argument('--airl_pth', type=str, default=main_pth + "/airl")
     parser.add_argument('--cbf_pth', type=str, default="data/new_comb/baselines/cbf")
-    parser.add_argument('--is_restore', type=bool, default=True)
-    parser.add_argument('--restore_pth', type=str, default="data/new_comb/baselines_100ts/airl")
-    parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
-
+    parser.add_argument('--is_restore', type=int, default=1)
+    parser.add_argument('--restore_pth', type=str, default="data/new_comb_new_demo/baselines/airl")
+    # parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
+    parser.add_argument('--demo_pth', type=str, default='src/demonstrations/16obs_acc_farther_target.pkl')
 
     args = parser.parse_args()
     return args
@@ -110,6 +118,8 @@ demo_pth = args.demo_pth
 
 cbf_weight = args.cbf_weight
 
+print("args.is_auto_tuning:", args.is_auto_tuning)
+
 # YY: Load demonstrations and create environment
 with open(demo_pth, 'rb') as f:
     demonstrations = pickle.load(f)
@@ -154,7 +164,9 @@ with tf.Session(config=config) as sess:
                      log_path=log_path,
                      env_eval=carEnv(demo=demo_pth, is_test=True),
                      cbf_weight=cbf_weight,
-                     is_freeze_discriminator=args.is_freeze_discriminator)
+                     is_freeze_discriminator=args.is_freeze_discriminator,
+                     is_auto_tuning=args.is_auto_tuning,
+                     is_use_two_step=args.is_use_two_step)
 
     # Add airl params
     for idx, var in enumerate(
@@ -206,17 +218,27 @@ with tf.Session(config=config) as sess:
 
     sampler = None
 
+    if args.ent_method == 'max':
+        center_adv = False
+        stop_entropy_gradient = True
+    else:
+        center_adv = True
+        stop_entropy_gradient = False
+
     algo = TRPO(env_spec=env.spec,
                 policy=policy,
                 baseline=baseline,
                 index=0,
                 sampler=sampler,
                 irl_model=irl_model,
-                generator_train_itrs=2,
+                generator_train_itrs=args.generator_train_itrs,
                 discrim_train_itrs=10,
-                policy_ent_coeff=0.0,
+                policy_ent_coeff=args.policy_ent_coeff,
                 discount=0.99,
-                max_kl_step=0.01)
+                max_kl_step=args.max_kl_step,
+                entropy_method=args.ent_method,
+                center_adv=center_adv,
+                stop_entropy_gradient=stop_entropy_gradient)
 
 
 
