@@ -44,24 +44,25 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    main_pth = 'data/trpo_cbf/try'
+    main_pth = 'data/trpo_cbf/pretrain_airl'
 
     # Basics
     parser.add_argument('--gpu', type=str, default='0')
     parser.add_argument('--seed', type=int, required=False, default=10)
+    parser.add_argument('--epoch_num', type=int, required=False, default=101)
 
     # AIRL params
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
-    parser.add_argument('--epoch_num', type=int, required=False, default=201)
+
+    # TRPO params
     parser.add_argument('--generator_train_itrs', type=int, required=False, default=10)
     parser.add_argument('--policy_ent_coeff', type=float, required=False, default=0.0)
     parser.add_argument('--max_kl_step', type=float, required=False, default=0.01)
-    parser.add_argument('--ent_method', type=str, required=False, default="regularized")
-
+    parser.add_argument('--ent_method', type=str, required=False, default="no_entropy")
 
     # CBF params
-    parser.add_argument('--cbf_weight', type=float, required=False, default=1e-5)
+    parser.add_argument('--cbf_weight', type=float, required=False, default=0)
     parser.add_argument('--is_freeze_discriminator', type=int, default=0)
     parser.add_argument('--is_auto_tuning', type=int, default=0)
     parser.add_argument('--is_use_two_step', type=int, default=1)
@@ -72,10 +73,10 @@ def parse_args():
     parser.add_argument('--share_pth', type=str, default=main_pth + "/share")
     parser.add_argument('--airl_pth', type=str, default=main_pth + "/airl")
     parser.add_argument('--cbf_pth', type=str, default="data/new_comb_new_demo/cbf_posx_posy/cbf")
-    parser.add_argument('--is_restore', type=int, default=1)
-    parser.add_argument('--restore_pth', type=str, default="data/new_comb_new_demo/baselines/airl")
-    # parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
+    parser.add_argument('--is_restore', type=int, default=0)
+    parser.add_argument('--restore_pth', type=str, default="data/new_comb_new_demo/baseline/airl")
     parser.add_argument('--demo_pth', type=str, default='src/demonstrations/16obs_acc_farther_target.pkl')
+    # parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
 
     args = parser.parse_args()
     return args
@@ -205,7 +206,7 @@ with tf.Session(config=config) as sess:
     if args.is_restore:
         # restore policy and airl
         if os.path.exists(restore_pth):
-            print(">> AIRL restore path exist!")
+            print(">> AIRL restore path exists!")
             saver = tf.train.Saver(save_dictionary_airl)
             saver.restore(sess, f"{restore_pth}/model")
 
