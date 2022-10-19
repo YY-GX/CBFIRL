@@ -9,9 +9,9 @@ from garage import _Default, make_optimizer
 from garage.np.optimizers import BatchDataset
 from garage.tf import compile_function
 from garage.tf.optimizers._dtypes import LazyDict
+from models.imitation_learning import SingleTimestepIRL
 
-
-class FirstOrderOptimizer:
+class FirstOrderOptimizerComb:
     """First order optimier.
 
     Performs (stochastic) gradient descent, possibly using fancier methods like
@@ -39,7 +39,7 @@ class FirstOrderOptimizer:
                  batch_size=32,
                  callback=None,
                  verbose=False,
-                 name='FirstOrderOptimizer'):
+                 name='FirstOrderOptimizerComb'):
         self._opt_fun = None
         self._target = None
         self._callback = callback
@@ -59,7 +59,7 @@ class FirstOrderOptimizer:
         self._train_op = None
         self._name = name
 
-    def update_opt(self, loss, target, inputs, extra_inputs=None, **kwargs):
+    def update_opt(self, loss, target, inputs, extra_inputs=None, batch_size_cbf=None, **kwargs):
         """Construct operation graph for the optimizer.
 
         Args:
@@ -85,6 +85,7 @@ class FirstOrderOptimizer:
             self._input_vars = inputs + extra_inputs
             self._opt_fun = LazyDict(
                 f_loss=lambda: compile_function(inputs + extra_inputs, loss), )
+            self.batch_size_cbf = batch_size_cbf
 
     def loss(self, inputs, extra_inputs=None):
         """The loss.
@@ -109,8 +110,8 @@ class FirstOrderOptimizer:
 
         # pylint: disable=too-many-branches
 
-    # yy: the place have sess.run
-    def optimize(self, inputs, extra_inputs=None, callback=None):
+    # yy: the place have sess.run. add a param paths
+    def optimize(self, inputs, paths, obs_t_ori, nobs_t_ori, extra_inputs=None, callback=None):
         """Perform optimization.
 
         Args:
@@ -144,6 +145,13 @@ class FirstOrderOptimizer:
                                self._batch_size,
                                extra_inputs=extra_inputs)
 
+
+        # yy: process paths
+        obs, obs_next, acts, acts_next, path_probs = \
+            SingleTimestepIRL.extract_paths(paths,
+                               keys=('observations', 'observations_next', 'actions', 'actions_next', 'a_logprobs'))
+
+
         sess = tf.compat.v1.get_default_session()
 
         for epoch in range(self._max_optimization_epochs):
@@ -155,9 +163,15 @@ class FirstOrderOptimizer:
                 for batch in dataset.iterate(update=True):
 
                     # yy: check the self._input_vars & batch here
+                    # yy: decompose batch into obs & nobs and insert them
+
+                    # yy: sample one batch
+                    nobs_batch, obs_batch, nact_batch, act_batch, lprobs_batch = \
+                        SingleTimestepIRL.sample_batch(obs_next, obs, acts_next, acts, path_probs,
+                                                       batch_size=self.batch_size_cbf)  # yy: Rollouts of (s, a)
 
                     sess.run(self._train_op,
-                             dict(list(zip(self._input_vars, batch))))
+                             dict(list(zip(self._input_vars, batch))).update({obs_t_ori: obs_batch, nobs_t_ori: nobs_batch}))
 
                     pbar.update(len(batch[0]))
 

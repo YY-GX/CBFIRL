@@ -13,10 +13,14 @@ from garage.np.algos import RLAlgorithm
 from garage.tf import (center_advs, compile_function, compute_advantages,
                        discounted_returns, flatten_inputs, graph_inputs,
                        positive_advs)
-from garage.tf.optimizers import FirstOrderOptimizer
+from garage.tf.optimizers import FirstOrderOptimizerComb
+
+from models.imitation_learning import SingleTimestepIRL
 
 # yapf: enable
 
+
+from models.comb_cbf import *
 
 class NPO(RLAlgorithm):
     """Natural Policy Gradient Optimization.
@@ -103,7 +107,11 @@ class NPO(RLAlgorithm):
                  use_neg_logli_entropy=False,
                  stop_entropy_gradient=False,
                  entropy_method='no_entropy',
-                 name='NPO'):
+                 name='NPO',
+                 outside_args=None):
+
+        self.outside_args = outside_args
+
         self.policy = policy
         self.irl_model = irl_model
         self.center_grads = center_grads
@@ -128,7 +136,7 @@ class NPO(RLAlgorithm):
         if optimizer is None:
             if optimizer_args is None:
                 optimizer_args = dict()
-            optimizer = FirstOrderOptimizer
+            optimizer = FirstOrderOptimizerComb
 
         self._check_entropy_configuration(entropy_method, center_adv,
                                           stop_entropy_gradient,
@@ -156,18 +164,41 @@ class NPO(RLAlgorithm):
 
         self._init_opt()
 
+        self.writer = SummaryWriter(outside_args.log_pth)
+
     def _init_opt(self):
         """Initialize optimizater."""
+        # yy: build cbf graph here
+        self.dO = self._env_spec.observation_space.flat_dim
+        self.batch_size_cbf = 32
+        self.obs_t_ori = tf.placeholder(tf.float32, [None, self.dO], name='obs')  # yy: current observation
+        self.nobs_t_ori = tf.placeholder(tf.float32, [None, self.dO], name='nobs')  # yy: next observation (n -> next)
+        h, self.cbf_loss, self.cbf_acc, self.debug_ls = \
+            build_training_graph_deriv_batch(s=tf.reshape(self.obs_t_ori, [-1, (self.dO // 4), 4]),
+                                             s_next=tf.reshape(self.nobs_t_ori, [-1, (self.dO // 4), 4]),
+                                             num_obs=(self.dO // 4) - 1, policy=self.policy, batch_size=self.batch_size_cbf,
+                                             is_use_two_step=1)
+
+
+
+
         pol_loss_inputs, pol_opt_inputs = self._build_inputs()
         self._policy_opt_inputs = pol_opt_inputs
 
         pol_loss, pol_kl = self._build_policy_loss(pol_loss_inputs)  # yy: policy loss here
-        self._optimizer.update_opt(loss=pol_loss,
+
+
+        # yy: calc total loss
+        total_loss = pol_loss + self.outside_args.cbf_weight * self.cbf_loss
+
+
+        self._optimizer.update_opt(loss=total_loss,
                                    target=self.policy,
                                    leq_constraint=(pol_kl, self._max_kl_step),
                                    inputs=flatten_inputs(
                                        self._policy_opt_inputs),
                                    constraint_name='mean_kl')
+
 
     def train(self, trainer):
         """Obtain samplers and start actual training for each epoch.
@@ -226,8 +257,12 @@ class NPO(RLAlgorithm):
             numpy.float64: Average return.
 
         """
+        # yy: evaluate collision num and successful rate
+        self.evaluate(itr)
+
         # -- Stage: Calculate and pad baselines
         paths = episodes.to_list()
+        paths_ori = paths.copy()
         paths = self.compute_irl(paths, itr)
         # TODO: insert training cbf here
         episodes = episodes.from_list(self._env_spec, paths)
@@ -258,11 +293,11 @@ class NPO(RLAlgorithm):
         logger.log('Optimizing policy...')
 
         for _ in range(self.generator_train_itrs):
-            self._optimize_policy(episodes, baselines)
+            self._optimize_policy(episodes, baselines, paths_ori)
 
         return np.mean(undiscounted_returns)
 
-    def _optimize_policy(self, episodes, baselines):
+    def _optimize_policy(self, episodes, baselines, paths):
         """Optimize policy.
 
         Args:
@@ -270,14 +305,19 @@ class NPO(RLAlgorithm):
             baselines (np.ndarray): Baseline predictions.
 
         """
+
+
         policy_opt_input_values = self._policy_opt_input_values(
-            episodes, baselines)
+            episodes, baselines, paths)
         logger.log('Computing loss before')
         loss_before = self._optimizer.loss(policy_opt_input_values)
         logger.log('Computing KL before')
         policy_kl_before = self._f_policy_kl(*policy_opt_input_values)
+
         logger.log('Optimizing')
         self._optimizer.optimize(policy_opt_input_values)
+        # self._optimizer.optimize(policy_opt_input_values, paths, self.obs_t_ori, self.nobs_t_ori)
+
         logger.log('Computing KL after')
         policy_kl = self._f_policy_kl(*policy_opt_input_values)
         logger.log('Computing loss after')
@@ -293,13 +333,15 @@ class NPO(RLAlgorithm):
         ent = np.sum(pol_ent) / np.sum(episodes.lengths)
         tabular.record('{}/Entropy'.format(self.policy.name), ent)
         tabular.record('{}/Perplexity'.format(self.policy.name), np.exp(ent))
-        returns = self._fit_baseline_with_data(episodes, baselines)
+        returns = self._fit_baseline_with_data(episodes, baselines, paths)
 
         ev = explained_variance_1d(baselines, returns, episodes.valids)
 
         tabular.record('{}/ExplainedVariance'.format(self._baseline.name), ev)
         self._old_policy.parameters = self.policy.parameters
 
+
+    # yy: placeholder here
     def _build_inputs(self):
         """Build input variables.
 
@@ -325,6 +367,10 @@ class NPO(RLAlgorithm):
             baseline_var = tf.compat.v1.placeholder(tf.float32,
                                                     shape=[None, None],
                                                     name='baseline')
+
+            # yy: cbf placeholder
+            obs_t_ori = self.obs_t_ori
+            nobs_t_ori = self.nobs_t_ori
 
             policy_state_info_vars = {
                 k: tf.compat.v1.placeholder(tf.float32,
@@ -364,7 +410,10 @@ class NPO(RLAlgorithm):
             baseline_var=baseline_var,
             valid_var=valid_var,
             policy_state_info_vars_list=policy_state_info_vars_list,
+            obs_batch=obs_t_ori,
+            nobs_batch=nobs_t_ori
         )
+
 
         return policy_loss_inputs, policy_opt_inputs
 
@@ -497,7 +546,7 @@ class NPO(RLAlgorithm):
 
         return policy_entropy
 
-    def _fit_baseline_with_data(self, episodes, baselines):
+    def _fit_baseline_with_data(self, episodes, baselines, paths):
         """Update baselines from samples.
 
         Args:
@@ -509,7 +558,7 @@ class NPO(RLAlgorithm):
 
         """
         policy_opt_input_values = self._policy_opt_input_values(
-            episodes, baselines)
+            episodes, baselines, paths)
 
         returns_tensor = self._f_returns(*policy_opt_input_values)
         returns_tensor = np.squeeze(returns_tensor, -1)
@@ -529,7 +578,9 @@ class NPO(RLAlgorithm):
         self._baseline.fit(paths)
         return returns_tensor
 
-    def _policy_opt_input_values(self, episodes, baselines):
+
+    # yy: real values here
+    def _policy_opt_input_values(self, episodes, baselines, paths):
         """Map episode samples to the policy optimizer inputs.
 
         Args:
@@ -553,6 +604,17 @@ class NPO(RLAlgorithm):
                                          episodes.lengths,
                                          self.max_episode_length)
 
+
+        # yy: insert obs nobs here
+        # yy: process paths
+        obs, obs_next, acts, acts_next, path_probs = \
+            SingleTimestepIRL.extract_paths(paths,
+                               keys=('observations', 'observations_next', 'actions', 'actions_next', 'a_logprobs'))
+        # yy: sample one batch
+        nobs_batch, obs_batch, nact_batch, act_batch, lprobs_batch = \
+            SingleTimestepIRL.sample_batch(obs_next, obs, acts_next, acts, path_probs,
+                                           batch_size=self.batch_size_cbf)  # yy: Rollouts of (s, a)
+
         # pylint: disable=unexpected-keyword-arg
         policy_opt_input_values = self._policy_opt_inputs._replace(
             obs_var=episodes.padded_observations,
@@ -561,6 +623,8 @@ class NPO(RLAlgorithm):
             baseline_var=baselines,
             valid_var=episodes.valids,
             policy_state_info_vars_list=policy_state_info_list,
+            obs_batch=obs_batch,
+            nobs_batch=nobs_batch
         )
 
         return flatten_inputs(policy_opt_input_values)
@@ -615,6 +679,44 @@ class NPO(RLAlgorithm):
             self._entropy_regularzied = False
         else:
             raise ValueError('Invalid entropy_method')
+
+    def evaluate(self, itr):
+        # Evaluation collision number
+        eval_step = 5
+        if itr > 0 and itr % eval_step == 0:
+            # Evaluation
+            # deterministic.set_seed(10)
+            # todo: import demo path from outsides
+            env_test = carEnv(demo=self.outside_args.demo_pth, is_test=True)
+            env_test.render('no_vis')
+            EVAL_TRAJ_NUM = 100
+
+            done = False
+            ob = env_test.reset()
+            succ_cnt, traj_cnt, coll_cnt, cnt = 0, 0, 0, 0
+
+            coll_ls, succ_ls = [], []
+            last_timestep_state_ls = []
+            while traj_cnt < EVAL_TRAJ_NUM:
+                if not done:
+                    ob, rew, done, info = env_test.step(self.policy.get_action(ob)[0])
+                else:
+                    # print(">> Eval traj num: ", traj_cnt)
+                    traj_cnt += 1
+                    coll_ls.append(info['collision_num'])
+                    coll_cnt = coll_cnt + info['collision_num']
+                    succ_cnt = succ_cnt + info['success']
+                    last_timestep_state_ls += env_test.unsafe_states
+                    ob = env_test.reset()
+                    done = False
+
+            print(">> Success traj num: ", succ_cnt, ", Collision traj num: ", coll_cnt, " out of ", EVAL_TRAJ_NUM,
+                  " trajs.")
+
+            self.writer.add_scalar('Eval - Average collision number', np.mean(coll_ls), itr)
+            self.writer.add_scalar('Eval - Average success number', succ_cnt / EVAL_TRAJ_NUM, itr)
+            self.writer.add_scalar('Eval - metric', (succ_cnt / EVAL_TRAJ_NUM) / np.mean(coll_ls), itr)
+
 
     def __getstate__(self):
         """Parameters to save in snapshot.

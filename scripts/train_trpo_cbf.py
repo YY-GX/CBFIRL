@@ -23,7 +23,7 @@ from garage.np.baselines import LinearFeatureBaseline
 from garage.sampler import RaySampler, MultiprocessingSampler
 from airl.irl_trpo import TRPO
 from airl.irl_trpo_comb import TRPO_COMB
-from models.comb_airl_state_batch import AIRL
+from models.airl_state import AIRL
 
 
 from garage.trainer import Trainer
@@ -44,7 +44,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    main_pth = 'data/new_comb_new_demo/test_repro'
+    main_pth = 'data/trpo_cbf/try'
 
     # Basics
     parser.add_argument('--gpu', type=str, default='0')
@@ -53,15 +53,15 @@ def parse_args():
     # AIRL params
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
-    parser.add_argument('--epoch_num', type=int, required=False, default=6)
-    parser.add_argument('--generator_train_itrs', type=int, required=False, default=5)
+    parser.add_argument('--epoch_num', type=int, required=False, default=201)
+    parser.add_argument('--generator_train_itrs', type=int, required=False, default=10)
     parser.add_argument('--policy_ent_coeff', type=float, required=False, default=0.0)
     parser.add_argument('--max_kl_step', type=float, required=False, default=0.01)
     parser.add_argument('--ent_method', type=str, required=False, default="regularized")
 
 
     # CBF params
-    parser.add_argument('--cbf_weight', type=float, required=False, default=1e-8)
+    parser.add_argument('--cbf_weight', type=float, required=False, default=1e-5)
     parser.add_argument('--is_freeze_discriminator', type=int, default=0)
     parser.add_argument('--is_auto_tuning', type=int, default=0)
     parser.add_argument('--is_use_two_step', type=int, default=1)
@@ -71,7 +71,7 @@ def parse_args():
     parser.add_argument('--log_pth', type=str, default=main_pth + "/log")
     parser.add_argument('--share_pth', type=str, default=main_pth + "/share")
     parser.add_argument('--airl_pth', type=str, default=main_pth + "/airl")
-    parser.add_argument('--cbf_pth', type=str, default="data/new_comb/baselines/cbf")
+    parser.add_argument('--cbf_pth', type=str, default="data/new_comb_new_demo/cbf_posx_posy/cbf")
     parser.add_argument('--is_restore', type=int, default=1)
     parser.add_argument('--restore_pth', type=str, default="data/new_comb_new_demo/baselines/airl")
     # parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
@@ -161,18 +161,25 @@ with tf.Session(config=config) as sess:
                                hidden_sizes=(32, 32))
 
     # AIRL
+
     irl_model = AIRL(env=env, expert_trajs=demonstrations,
                      state_only=True, fusion=True,
                      max_itrs=10,
                      name=f'skill',
-                     fusion_num=args.fusion_num,
-                     policy=policy,
-                     log_path=log_path,
-                     env_eval=carEnv(demo=demo_pth, is_test=True),
-                     cbf_weight=cbf_weight,
-                     is_freeze_discriminator=args.is_freeze_discriminator,
-                     is_auto_tuning=args.is_auto_tuning,
-                     is_use_two_step=args.is_use_two_step)
+                     fusion_num=args.fusion_num)
+
+    # irl_model = AIRL(env=env, expert_trajs=demonstrations,
+    #                  state_only=True, fusion=True,
+    #                  max_itrs=10,
+    #                  name=f'skill',
+    #                  fusion_num=args.fusion_num,
+    #                  policy=policy,
+    #                  log_path=log_path,
+    #                  env_eval=carEnv(demo=demo_pth, is_test=True),
+    #                  cbf_weight=cbf_weight,
+    #                  is_freeze_discriminator=args.is_freeze_discriminator,
+    #                  is_auto_tuning=args.is_auto_tuning,
+    #                  is_use_two_step=args.is_use_two_step)
 
     # Add airl params
     for idx, var in enumerate(
@@ -202,21 +209,6 @@ with tf.Session(config=config) as sess:
             saver = tf.train.Saver(save_dictionary_airl)
             saver.restore(sess, f"{restore_pth}/model")
 
-    # sess.run(tf.global_variables_initializer())
-    initialize_uninitialized(tf.get_default_session())
-
-    # Restore CBF NN
-    cbf_path = args.cbf_pth
-    save_dictionary_cbf = {}
-    for idx, var in enumerate(
-            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                              scope=f'skill/cbf')):
-        save_dictionary_cbf[f'cbf_{idx}'] = var
-    print(">> Length of save_dictionary_cbf: ", len(save_dictionary_cbf))
-    # print([n.name for n in tf.get_default_graph().as_graph_def().node])
-    saver_cbf = tf.train.Saver(save_dictionary_cbf)
-    if os.path.exists(cbf_path):
-        saver_cbf.restore(sess, f"{cbf_path}/model")
 
 
 
@@ -261,7 +253,24 @@ with tf.Session(config=config) as sess:
                 entropy_method=args.ent_method,
                 center_adv=center_adv,
                 stop_entropy_gradient=stop_entropy_gradient,
-                cbf_weight=cbf_weight)
+                outside_args=args)
+
+
+    # sess.run(tf.global_variables_initializer())
+    initialize_uninitialized(tf.get_default_session())
+
+    # Restore CBF NN
+    cbf_path = args.cbf_pth
+    save_dictionary_cbf = {}
+    for idx, var in enumerate(
+            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                              scope=f'cbf')):
+        save_dictionary_cbf[f'cbf_{idx}'] = var
+    print(">> Length of save_dictionary_cbf: ", len(save_dictionary_cbf))
+    # print([n.name for n in tf.get_default_graph().as_graph_def().node])
+    saver_cbf = tf.train.Saver(save_dictionary_cbf)
+    if os.path.exists(cbf_path):
+        saver_cbf.restore(sess, f"{cbf_path}/model")
 
 
 

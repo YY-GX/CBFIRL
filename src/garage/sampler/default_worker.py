@@ -50,7 +50,10 @@ class DefaultWorker(Worker):
     def worker_init(self):
         """Initialize a worker."""
         if self._seed is not None:
-            deterministic.set_seed(self._seed + self._worker_number)
+            # yy: reproduce
+            pass
+            # deterministic.set_seed(self._seed)
+            # deterministic.set_seed(self._seed + self._worker_number)
 
     def update_agent(self, agent_update):
         """Update an agent, assuming it implements :class:`~Policy`.

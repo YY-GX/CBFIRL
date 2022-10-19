@@ -27,10 +27,6 @@ import argparse
 from garage.experiment import deterministic
 from models.architectures import relu_net
 
-# Set seeds
-seed = 0
-deterministic.set_seed(seed)
-
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -41,7 +37,8 @@ def parse_args():
     # parser.add_argument('--gpu', type=str, default='0')
     # parser.add_argument('--demo_path', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
     parser.add_argument('--demo_path', type=str, default='src/demonstrations/16obs_acc_farther_target.pkl')
-    parser.add_argument('--policy_path', type=str, default='data/new_comb_new_demo/auto-1-freeze/share')
+    parser.add_argument('--policy_path', type=str, default='data/trpo_cbf/try/share')
+    parser.add_argument('--seed', type=int, required=False, default=10)
     args = parser.parse_args()
     return args
 # 'data/comb/16obs_airl_cbf_debug/share'
@@ -52,6 +49,13 @@ demo_pth = args.demo_path
 
 # YY: params
 EVAL_TRAJ_NUM = 100
+
+
+
+# Set seeds
+seed = args.seed
+print("seed: ", seed)
+deterministic.set_seed(seed)
 
 
 

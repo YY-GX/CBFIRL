@@ -8,6 +8,7 @@ import gym
 import numpy as np
 
 from garage import Environment, EnvSpec, EnvStep, StepType
+from garage.experiment import deterministic
 
 # The gym environments using one of the packages in the following lists as
 # entry points don't close their viewer windows.
@@ -136,6 +137,9 @@ class GymEnv(Environment):
             self._env = gym.make(env)
         elif isinstance(env, gym.Env):
             self._env = env
+            # yy: set seed
+            self._env.seed(deterministic.get_seed())
+            self._env.action_space.seed(deterministic.get_seed())
         else:
             raise ValueError('GymEnv can take env as either a string, '
                              'or an Gym environment, but got type {} '

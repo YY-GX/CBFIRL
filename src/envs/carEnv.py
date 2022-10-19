@@ -11,8 +11,8 @@ import time
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from models.architectures import relu_net
 import tensorflow as tf
-from garage.tf.policies import GaussianMLPPolicy
 from garage.envs import GymEnv
+from garage.experiment import deterministic
 
 class carEnv(Env):
     def __init__(self, demo='src/demonstrations/safe_demo_better.pkl', seed=10, is_hundred=False, is_test=False):
@@ -67,6 +67,7 @@ class carEnv(Env):
 
 
     def reset(self):
+        self.seed(deterministic.get_seed())
         self.unsafe_states = []  # yy: store states before collision, return it when done
         self.success = 0
         self.collision_num = 0

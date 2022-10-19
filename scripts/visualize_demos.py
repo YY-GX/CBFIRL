@@ -561,6 +561,7 @@ def visualize_h_value_vel():
         # Restore CBF NN
         cbf_path = "data/new_vel/baselines_bigger_region/cbf"
         cbf_path = "data/new_comb_new_demo/cbf_new_demo/cbf"
+        cbf_path = "data/new_comb_new_demo/cbf_posx_posy/cbf"
         # cbf_path = "data/comb/baselines_repro_1/cbf"
         save_dictionary_cbf = {}
         for idx, var in enumerate(
@@ -610,10 +611,12 @@ def visualize_h_value_vel():
                 h_ls.append(np.min(h_))
             h_ls_ls.append(h_ls)
 
+
+        print(h_ls_ls)
         ax = sns.heatmap(np.array(h_ls_ls))
         ax.invert_yaxis()
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/new_h_visual/new_demo_h.png')
+        plt.savefig('data/visual_videos/new_h_visual/posxposy.png')
 
 
 
@@ -625,5 +628,5 @@ if __name__ == "__main__":
     # show_safe_demo()
     # show_unsafe_demo()
     # visualize_learned_reward()
-    visualize_h_value()
-    # visualize_h_value_vel()
+    # visualize_h_value()
+    visualize_h_value_vel()
