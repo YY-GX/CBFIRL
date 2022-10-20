@@ -44,7 +44,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    main_pth = 'data/trpo_cbf/try_str2'
+    main_pth = 'data/trpo_cbf/test'
 
     # Basics
     parser.add_argument('--gpu', type=str, default='0')

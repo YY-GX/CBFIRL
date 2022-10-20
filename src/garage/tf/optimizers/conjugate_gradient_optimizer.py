@@ -302,9 +302,10 @@ class ConjugateGradientOptimizer:
         target,
         leq_constraint,
         inputs,
+        other_output,
         extra_inputs=None,
         name='ConjugateGradientOptimizer',
-        constraint_name='constraint',
+        constraint_name='constraint'
     ):
         """Update the optimizer.
 
@@ -372,6 +373,11 @@ class ConjugateGradientOptimizer:
                     inputs=inputs + extra_inputs,
                     outputs=[loss, constraint_term],
                 ),
+                # yy: cbf output
+                f_cbf=lambda: compile_function(
+                    inputs=inputs + extra_inputs,
+                    outputs=other_output,
+                ),
             )
 
     def loss(self, inputs, extra_inputs=None):
@@ -413,6 +419,28 @@ class ConjugateGradientOptimizer:
             extra_inputs = tuple()
         return _sliced_fn(self._opt_fun['f_constraint'],
                           self._num_slices)(inputs, extra_inputs)
+
+
+    def other_output(self, inputs, extra_inputs=None):
+        """Constraint value.
+
+        Args:
+            inputs (list[numpy.ndarray]): A list inputs, which could be
+                subsampled if needed. It is assumed that the first dimension
+                of these inputs should correspond to the number of data points
+            extra_inputs (list[numpy.ndarray]): A list of extra inputs which
+                should not be subsampled.
+
+        Returns:
+            float: Constraint value.
+
+        """
+        inputs = tuple(inputs)
+        if extra_inputs is None:
+            extra_inputs = tuple()
+        return _sliced_fn(self._opt_fun['f_cbf'],
+                          self._num_slices)(inputs, extra_inputs)
+
 
     def optimize(self,
                  inputs,

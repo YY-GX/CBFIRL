@@ -190,6 +190,7 @@ class NPO(RLAlgorithm):
 
         # yy: calc total loss
         total_loss = pol_loss + self.outside_args.cbf_weight * self.cbf_loss
+        output = [total_loss, self.cbf_loss, self.cbf_acc]
 
 
         self._optimizer.update_opt(loss=total_loss,
@@ -197,7 +198,8 @@ class NPO(RLAlgorithm):
                                    leq_constraint=(pol_kl, self._max_kl_step),
                                    inputs=flatten_inputs(
                                        self._policy_opt_inputs),
-                                   constraint_name='mean_kl')
+                                   constraint_name='mean_kl',
+                                   other_output=output)
 
 
     def train(self, trainer):
@@ -292,12 +294,18 @@ class NPO(RLAlgorithm):
 
         logger.log('Optimizing policy...')
 
+
+        cbf_loss_ls, cbf_acc_ls, total_loss_ls = [], [], []
         for _ in range(self.generator_train_itrs):
-            self._optimize_policy(episodes, baselines, paths_ori)
+            self._optimize_policy(episodes, baselines, paths_ori, itr, cbf_loss_ls, cbf_acc_ls, total_loss_ls)
+
+        self.writer.add_scalar('Eval - CBF Loss', np.mean(cbf_loss_ls), itr)
+        self.writer.add_scalar('Eval - CBF Acc', np.mean(cbf_acc_ls), itr)
+        self.writer.add_scalar('Eval - Total Loss', np.mean(total_loss_ls), itr)
 
         return np.mean(undiscounted_returns)
 
-    def _optimize_policy(self, episodes, baselines, paths):
+    def _optimize_policy(self, episodes, baselines, paths, itr, cbf_loss_ls, cbf_acc_ls, total_loss_ls):
         """Optimize policy.
 
         Args:
@@ -317,6 +325,13 @@ class NPO(RLAlgorithm):
         logger.log('Optimizing')
         self._optimizer.optimize(policy_opt_input_values)
         # self._optimizer.optimize(policy_opt_input_values, paths, self.obs_t_ori, self.nobs_t_ori)
+        # yy: log cbf acc & loss
+        logger.log('CBF info')
+        total_loss, cbf_loss, cbf_acc = self._optimizer.other_output(policy_opt_input_values)
+        cbf_loss_ls.append(np.mean(cbf_loss))
+        cbf_acc_ls.append(np.mean(cbf_acc))
+        total_loss_ls.append(np.mean(total_loss))
+
 
         logger.log('Computing KL after')
         policy_kl = self._f_policy_kl(*policy_opt_input_values)

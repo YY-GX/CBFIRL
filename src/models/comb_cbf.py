@@ -1167,8 +1167,8 @@ def train_init_CBF_NN_new(demo_path,
     np.random.shuffle(S_s)
     np.random.shuffle(S_u)
     # # Only use parts of S_s and S_u
-    S_s = S_s[:20000]
-    S_u = S_u[:20000]
+    S_s = S_s[:8000]
+    S_u = S_u[:8000]
 
     # Add idx -1 to each s_s S_s
     S_s = [(s_s, -1) for s_s in S_s]
@@ -1236,6 +1236,10 @@ def train_init_CBF_NN_new(demo_path,
                     dang_mask_reshape_ = np.zeros([k]).astype(bool)
                     safe_mask_reshape_ = np.ones([k]).astype(bool)
                     safe_mask_reshape_[-1] = False
+                    # yy: continue if idx is out of 12
+                    if idx >= config.TOP_K:
+                        continue
+
                     if idx != -1:  # no dangerous h
                         dang_mask_reshape_[idx] = True
                         safe_mask_reshape_[idx] = False
@@ -1270,6 +1274,9 @@ def train_init_CBF_NN_new(demo_path,
                         dang_mask_reshape_ = np.zeros([k]).astype(bool)
                         safe_mask_reshape_ = np.ones([k]).astype(bool)
                         safe_mask_reshape_[-1] = False
+                        # yy: continue if idx is out of 12
+                        if idx >= config.TOP_K:
+                            continue
                         if idx != -1:  # no dangerous h
                             dang_mask_reshape_[idx] = True
                             safe_mask_reshape_[idx] = False
@@ -1370,8 +1377,8 @@ if __name__ == '__main__':
     #                   unsafe_state_path='src/demonstrations/unsafe_states_20000_final.pkl',)
 
     train_init_CBF_NN_new(demo_path="src/demonstrations/16obs_acc_farther_target.pkl",
-                      log_path="data/trpo_cbf/pretrain_cbf/log",
-                      cbf_save_path="data/trpo_cbf/pretrain_cbf/cbf",
+                      log_path="data/trpo_cbf/pretrain_cbf_from_eval/log",
+                      cbf_save_path="data/trpo_cbf/pretrain_cbf_from_eval/cbf",
                       num_obs=16,
                       is_load_unsafe_states=True,
-                      unsafe_state_path='src/demonstrations/unsafe_states.npy',)
+                      unsafe_state_path='src/demonstrations/unsafe_states_collected_from_eval.npy',)

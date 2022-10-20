@@ -442,6 +442,7 @@ def visualize_h_value():
         # cbf_path = "data/simple/airl_cbf_debug/cbf"  # simple
         cbf_path = "data/new_comb_new_demo/cbf_posx_posy_velx_vely/cbf"
         cbf_path = "data/trpo_cbf/pretrain_airl/cbf"
+        cbf_path = "data/trpo_cbf/pretrain_cbf_from_eval/cbf"
         save_dictionary_cbf = {}
         for idx, var in enumerate(
                 tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -507,7 +508,7 @@ def visualize_h_value():
 
         fig = plt.figure(figsize=(12, 9))
         h_ls_ls = []
-        v = np.array([-1, -1])
+        v = np.array([0.1, 0.1])
         # v = np.array([0.4953, 0.1285])
         # v = np.array([3.0930e-02, 7.9221e-01])
         # v = np.array([0, 0])
@@ -527,7 +528,7 @@ def visualize_h_value():
         ax = sns.heatmap(np.array(h_ls_ls))
         ax.invert_yaxis()
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/h_visualize_strategy2/v_-1_-1.png')
+        plt.savefig('data/visual_videos/h_visualize_strategy2/eval_v_0.1_0.1.png')
 
         # image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
         # image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))

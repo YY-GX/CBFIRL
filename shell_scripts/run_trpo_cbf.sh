@@ -1,11 +1,18 @@
 #!/bin/bash
 
 
-w_cbf=(1e-3 1e-4 1e-5 1e-6)
+w_cbf=(10000 7500 5000 2500)
 entro_coeff=(0.001 0.01)
 generator_iter=(10)
 max_kl=(0.01 0.1)
 ent_methods=("regularized")
+
+#w_cbf=(10000 1000 100)
+#entro_coeff=(0.001)
+#generator_iter=(10)
+#max_kl=(0.01)
+#ent_methods=("regularized")
+
 
 i=1
 FOLDER="data/trpo_cbf/"
@@ -21,7 +28,7 @@ for w in "${w_cbf[@]}";
               do
                 for ent_m in "${ent_methods[@]}";
                   do
-                    mainfolder="${FOLDER}tune_w_trpo_$i"
+                    mainfolder="${FOLDER}bigw_str1_$i"
                     python scripts/train_trpo_cbf.py \
                      --seed 10 \
                      --cbf_weight $w \
