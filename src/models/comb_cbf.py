@@ -1141,7 +1141,10 @@ def train_init_CBF_NN_new(demo_path,
     # Collect unsafe states. Load if already exist.
     if is_load_unsafe_states:
         # yy: strategy 2
-        S_u = np.load(unsafe_state_path)
+        S_u = list(np.load(unsafe_state_path, allow_pickle=True))
+        for j, (obv, idx) in enumerate(S_u):
+            topk_mask = np.argsort(np.sum(np.square((obv[:-1, :] - obv[-1, :])[:, :2]), axis=1))[:config.TOP_K]
+            S_u[j] = (np.concatenate([obv[:-1, :][topk_mask, :], obv[-1, :][None, :]], axis=0), idx)
 
         # yy: strategy 1
         # with open(unsafe_state_path, 'rb') as f:
@@ -1164,8 +1167,8 @@ def train_init_CBF_NN_new(demo_path,
     np.random.shuffle(S_s)
     np.random.shuffle(S_u)
     # # Only use parts of S_s and S_u
-    S_s = S_s[:2048]
-    S_u = S_u[:2048]
+    S_s = S_s[:20000]
+    S_u = S_u[:20000]
 
     # Add idx -1 to each s_s S_s
     S_s = [(s_s, -1) for s_s in S_s]
@@ -1312,7 +1315,8 @@ def build_training_graph_deriv_batch(s, s_next, num_obs, policy, batch_size, is_
     """
     # x is difference between the state of each agent and other agents
     x = tf.expand_dims(s, 2) - tf.expand_dims(s, 1)  # yy: shape: [bs, 13, 13, 4]
-    x = x[:, :, :, :2]
+    if is_use_two_step:
+        x = x[:, :, :, :2]
 
     # Get h() from CBF NN (h shape: 1 * 13).
     h = tf.compat.v1.map_fn(fn=lambda t: tf.reshape(comb_core.network_cbf_vel(x=t, r=config.DIST_MIN_THRES)[0], [-1]), elems=x)  # [bs, 13]
@@ -1366,8 +1370,8 @@ if __name__ == '__main__':
     #                   unsafe_state_path='src/demonstrations/unsafe_states_20000_final.pkl',)
 
     train_init_CBF_NN_new(demo_path="src/demonstrations/16obs_acc_farther_target.pkl",
-                      log_path="data/trpo_cbf/pretrain_airl/log",
-                      cbf_save_path="data/trpo_cbf/pretrain_airl/cbf",
+                      log_path="data/trpo_cbf/pretrain_cbf/log",
+                      cbf_save_path="data/trpo_cbf/pretrain_cbf/cbf",
                       num_obs=16,
                       is_load_unsafe_states=True,
                       unsafe_state_path='src/demonstrations/unsafe_states.npy',)

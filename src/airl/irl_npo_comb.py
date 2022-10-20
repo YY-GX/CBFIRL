@@ -177,7 +177,7 @@ class NPO(RLAlgorithm):
             build_training_graph_deriv_batch(s=tf.reshape(self.obs_t_ori, [-1, (self.dO // 4), 4]),
                                              s_next=tf.reshape(self.nobs_t_ori, [-1, (self.dO // 4), 4]),
                                              num_obs=(self.dO // 4) - 1, policy=self.policy, batch_size=self.batch_size_cbf,
-                                             is_use_two_step=1)
+                                             is_use_two_step=self.outside_args.is_use_two_step)
 
 
 
@@ -683,7 +683,7 @@ class NPO(RLAlgorithm):
     def evaluate(self, itr):
         # Evaluation collision number
         eval_step = 5
-        if itr > 0 and itr % eval_step == 0:
+        if itr % eval_step == 0:
             # Evaluation
             # deterministic.set_seed(10)
             # todo: import demo path from outsides
