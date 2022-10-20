@@ -1,5 +1,4 @@
-#!/bin/sh
-
+#!/bin/bash
 
 
 w_cbf=(1e-3 1e-4 1e-5 1e-6)
