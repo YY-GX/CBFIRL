@@ -114,10 +114,10 @@ FOLDER="data/new_comb_new_demo/"
 #    python scripts/airl_safe_test.py --policy_path "${mainfolder}"
 #done
 
-i_array=(3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18)
-i_array=(19 20 21 22 23 24 25 26)
+i_array=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18)
+i_array=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16)
 #i_array=(1 2 3)
-FOLDER="data/new_comb_new_demo/TRPO-only_safe_deriv_"
+FOLDER="data/trpo_cbf/bigw_str1_"
 i=1
 
 cd .. && pwd &&

@@ -13,6 +13,12 @@ ent_methods=("regularized")
 #max_kl=(0.01)
 #ent_methods=("regularized")
 
+w_cbf=(10000)
+entro_coeff=(0.01)
+generator_iter=(10)
+max_kl=(0.01)
+ent_methods=("regularized")
+
 
 i=1
 FOLDER="data/trpo_cbf/"
@@ -28,11 +34,11 @@ for w in "${w_cbf[@]}";
               do
                 for ent_m in "${ent_methods[@]}";
                   do
-                    mainfolder="${FOLDER}bigw_str1_$i"
+                    mainfolder="${FOLDER}repro_3_$i"
                     python scripts/train_trpo_cbf.py \
                      --seed 10 \
                      --cbf_weight $w \
-                     --epoch_num 201 \
+                     --epoch_num 76 \
                      --cbf_pth "data/new_comb_new_demo/cbf_posx_posy/cbf"\
                      --restore_pth "data/trpo_cbf/pretrain_airl/airl"\
                      --is_restore 1 \
