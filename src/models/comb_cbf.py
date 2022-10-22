@@ -1376,9 +1376,18 @@ if __name__ == '__main__':
     #                   is_load_unsafe_states=False,
     #                   unsafe_state_path='src/demonstrations/unsafe_states_20000_final.pkl',)
 
-    train_init_CBF_NN_new(demo_path="src/demonstrations/16obs_acc_farther_target.pkl",
-                      log_path="data/trpo_cbf/pretrain_cbf_from_eval/log",
-                      cbf_save_path="data/trpo_cbf/pretrain_cbf_from_eval/cbf",
-                      num_obs=16,
-                      is_load_unsafe_states=True,
-                      unsafe_state_path='src/demonstrations/unsafe_states_collected_from_eval.npy',)
+    # # 16 obs
+    # train_init_CBF_NN_new(demo_path="src/demonstrations/16obs_acc_farther_target.pkl",
+    #                   log_path="data/trpo_cbf/pretrain_cbf_from_eval/log",
+    #                   cbf_save_path="data/trpo_cbf/pretrain_cbf_from_eval/cbf",
+    #                   num_obs=16,
+    #                   is_load_unsafe_states=True,
+    #                   unsafe_state_path='src/demonstrations/unsafe_states_collected_from_eval.npy',)
+
+    # 8 obs
+    train_init_CBF_NN_new(demo_path="src/demonstrations/8obs_acc_farther_target.pkl",
+                      log_path="data/trpo_cbf_8obs/pretrain_cbf/log",
+                      cbf_save_path="data/trpo_cbf_8obs/pretrain_cbf/cbf",
+                      num_obs=8,
+                      is_load_unsafe_states=False,
+                      unsafe_state_path='src/demonstrations/8obs_unsafe_states.npy',)

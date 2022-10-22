@@ -25,7 +25,6 @@ from airl.irl_trpo import TRPO
 from airl.irl_trpo_comb import TRPO_COMB
 from models.airl_state import AIRL
 
-
 from garage.trainer import Trainer
 from global_utils.utils import *
 from garage.experiment import Snapshotter

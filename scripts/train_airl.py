@@ -32,18 +32,23 @@ import argparse
 
 import envs.config as config_file
 import os
+from garage.experiment import deterministic
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 def parse_args():
+    main_pth = 'data/just_airl/airl2'
+
     parser = argparse.ArgumentParser()
     now = datetime.now()
     parser.add_argument('--fusion_num', type=int, required=False, default=2000)
     parser.add_argument('--demo_num', type=int, required=False, default=1000)
-    parser.add_argument('--epoch_num', type=int, required=False, default=200)
-    parser.add_argument('--share_pth', type=str, default=None)
-    parser.add_argument('--airl_pth', type=str, default=None)
-    parser.add_argument('--demo_pth', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
+    parser.add_argument('--epoch_num', type=int, required=False, default=10)
+    parser.add_argument('--share_pth', type=str, default=main_pth + "/share")
+    parser.add_argument('--airl_pth', type=str, default=main_pth + "/airl")
+    parser.add_argument('--demo_pth', type=str, default='src/demonstrations/16obs_acc_farther_target.pkl')
     parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('--seed', type=int, required=False, default=10)
     args = parser.parse_args()
     return args
 
@@ -72,7 +77,9 @@ config.gpu_options.allow_growth = True
 share_path = args.share_pth
 airl_path = args.airl_pth
 
-
+# Set seeds
+seed = args.seed
+deterministic.set_seed(seed)
 
 
 
@@ -139,8 +146,8 @@ with tf.Session(config=config) as sess:
         for idx, var in enumerate(
             tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                               scope=f'action')):
-            save_dictionary_share[f'action_{index}_{idx}'] = var
-            save_dictionary_airl[f'action_{index}_{idx}'] = var
+            save_dictionary_share[f'action_{idx}'] = var
+            save_dictionary_airl[f'action_{idx}'] = var
 
         # Add reward params
         for idx, var in enumerate(

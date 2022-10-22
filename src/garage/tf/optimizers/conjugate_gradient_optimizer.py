@@ -302,7 +302,7 @@ class ConjugateGradientOptimizer:
         target,
         leq_constraint,
         inputs,
-        other_output,
+        other_output=None,
         extra_inputs=None,
         name='ConjugateGradientOptimizer',
         constraint_name='constraint'
