@@ -37,8 +37,8 @@ def parse_args():
     # parser.add_argument('--gpu', type=str, default='0')
     # parser.add_argument('--demo_path', type=str, default='src/demonstrations/safe_demo_16obs_stop.pkl')
     parser.add_argument('--demo_path', type=str, default='src/demonstrations/16obs_acc_farther_target.pkl')
-    parser.add_argument('--policy_path', type=str, default='data/trpo_cbf/try_is_trained_1/share')
-    parser.add_argument('--seed', type=int, required=False, default=10)
+    parser.add_argument('--policy_path', type=str, default='data/just_airl/airl_1/share')
+    parser.add_argument('--seed', type=int, required=False, default=1)
     args = parser.parse_args()
     return args
 # 'data/comb/16obs_airl_cbf_debug/share'
@@ -83,17 +83,17 @@ with tf.Session(config=config) as sess:
     rew_input = tf.reshape(ph_obv, [1, dim])  # r(s)
     # rew_input = tf.concat([tf.reshape(ph_obv, [1, dim]), tf.reshape(a, [1, 2])], axis=1)  # r(s, a)
 
-    with tf.variable_scope('skill/discrim/reward'):
-        loss_reward = relu_net(rew_input, dout=1, **{})
-
-    for idx, var in enumerate(
-            tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                              scope=f'skill/discrim/reward')):
-        save_dictionary_reward[f'reward_{idx}'] = var
-
-    saver = tf.train.Saver(save_dictionary_reward)
-    saver.restore(sess, f"{log_path}/model")
-
+    # with tf.variable_scope('skill/discrim/reward'):
+    #     loss_reward = relu_net(rew_input, dout=1, **{})
+    #
+    # for idx, var in enumerate(
+    #         tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+    #                           scope=f'skill/discrim/reward')):
+    #     save_dictionary_reward[f'reward_{idx}'] = var
+    #
+    # saver = tf.train.Saver(save_dictionary_reward)
+    # saver.restore(sess, f"{log_path}/model")
+    #
 
 
 
@@ -113,7 +113,7 @@ with tf.Session(config=config) as sess:
     for idx, var in enumerate(
         tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                           scope=f'action')):
-        save_dictionary[f'action_{idx}'] = var
+        save_dictionary[f'action_0_{idx}'] = var
 
     policies.append(policy)
 

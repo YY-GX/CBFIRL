@@ -430,7 +430,7 @@ def visualize_learned_reward():
 
 
 def visualize_h_value():
-    num_obs = 16
+    num_obs = 8
 
     with tf.Session() as sess:
         s, dang_mask_reshape, safe_mask_reshape, h, loss, loss_dang, loss_safe, acc_dang, acc_safe, loss_list, acc_list \
@@ -443,6 +443,7 @@ def visualize_h_value():
         cbf_path = "data/new_comb_new_demo/cbf_posx_posy_velx_vely/cbf"
         cbf_path = "data/trpo_cbf/pretrain_airl/cbf"
         cbf_path = "data/trpo_cbf/pretrain_cbf_from_eval/cbf"
+        cbf_path = "data/trpo_cbf_8obs/pretrain_cbf/cbf"
         save_dictionary_cbf = {}
         for idx, var in enumerate(
                 tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -472,6 +473,17 @@ def visualize_h_value():
                            [9.74807858e-01, 1.41387892e+00, -8.45868737e-02, 1.28579391e-02],
                            [1.64279938e-02, 1.36938488e+00, -9.76583958e-02, 1.62398428e-01],
                            [4.61973995e-01, 7.05967844e-02, -1.73432156e-02, -1.04260698e-01]])
+
+        # 8obs
+        s_obs = np.array([[3.17693561e-01, 1.04224133e+00, -4.58403956e-04, 2.91030616e-01],
+                           [7.20915675e-01, 1.20146918e+00, -6.04842119e-02, 2.36023106e-02],
+                           [1.81653216e-01, 8.17508757e-01, -2.31951941e-02, -1.06028296e-01],
+                           [3.60976666e-01, 5.99796593e-01, -3.26026753e-02, -9.46359783e-02],
+                           [9.69331861e-01, 9.34264004e-01, -3.18852700e-02, 1.04853600e-01],
+                           [7.04886138e-01, 4.64102238e-01, 2.44546141e-02, 1.53624892e-01],
+                           [9.56991494e-01, 6.15198612e-01, -5.54611906e-02, -1.43265963e-01],
+                           [3.61837506e-01, 1.45298409e+00, 3.53539549e-02, 1.60570771e-01],])
+
 
         # # 2
         # s_obs = np.array([[1.2132, 0.6727, -0.0084, -0.0141],
@@ -528,7 +540,7 @@ def visualize_h_value():
         ax = sns.heatmap(np.array(h_ls_ls))
         ax.invert_yaxis()
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/h_visualize_strategy2/eval_v_0.1_0.1.png')
+        plt.savefig('data/visual_videos/8obs/posxposy.jpg')
 
         # image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
         # image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
@@ -553,7 +565,7 @@ def visualize_h_value():
 
 
 def visualize_h_value_vel():
-    num_obs = 16
+    num_obs = 8
 
     with tf.Session() as sess:
         s, dang_mask_reshape, safe_mask_reshape, h, loss, loss_dang, loss_safe, acc_dang, acc_safe, loss_list, acc_list \
@@ -564,6 +576,7 @@ def visualize_h_value_vel():
         cbf_path = "data/new_vel/baselines_bigger_region/cbf"
         cbf_path = "data/new_comb_new_demo/cbf_new_demo/cbf"
         cbf_path = "data/new_comb_new_demo/cbf_posx_posy/cbf"
+        cbf_path = "data/trpo_cbf_8obs/pretrain_cbf/cbf"
         # cbf_path = "data/comb/baselines_repro_1/cbf"
         save_dictionary_cbf = {}
         for idx, var in enumerate(
@@ -618,7 +631,7 @@ def visualize_h_value_vel():
         ax = sns.heatmap(np.array(h_ls_ls))
         ax.invert_yaxis()
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/new_h_visual/posxposy.png')
+        plt.savefig('data/visual_videos/8obs/posxposy.png')
 
 
 
