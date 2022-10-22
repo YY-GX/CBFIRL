@@ -69,9 +69,14 @@ def demo_remove_top_k(demos, topk):
 args = parse_args()
 
 # GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)
-config.gpu_options.allow_growth = True
+# os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+# config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=True)
+# config.gpu_options.allow_growth = True
+# yy: only use cpu
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+config = tf.ConfigProto(device_count={'GPU': 0}, allow_soft_placement=True, log_device_placement=False)
+
+
 
 # log_path = args.log_pth
 share_path = args.share_pth
