@@ -67,9 +67,9 @@
 
 
 
-seeds=(2 3 4 5 6 7 8 9 10)
+seeds=(1 2 3 4 5 6 7 8 9 10)
 
-i=2
+i=1
 FOLDER="data/just_airl/"
 
 cd .. && pwd &&

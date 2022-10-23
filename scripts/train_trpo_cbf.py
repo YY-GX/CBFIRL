@@ -185,8 +185,8 @@ with tf.Session(config=config) as sess:
     # Add airl params
     for idx, var in enumerate(
         tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                          scope=f'skill')):
-        save_dictionary_airl[f'my_skill_{idx}'] = var
+                          scope=f'skill_0')):
+        save_dictionary_airl[f'my_skill_0_{idx}'] = var
 
     # Add policy params
     for idx, var in enumerate(

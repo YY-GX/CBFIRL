@@ -73,16 +73,16 @@ env = GymEnv(carEnv(demo=demo_pth), max_episode_length=1000)
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
-    # yy: visualize reward
-    dim = 52
-    save_dictionary_reward = {}
-    # restore reward
-    ph_obv = tf.placeholder(tf.float32, shape=(dim), name='ph_obv')
-    # a = tf.placeholder(tf.float32, shape=(2,), name='ph_a')
-
-    rew_input = tf.reshape(ph_obv, [1, dim])  # r(s)
-    # rew_input = tf.concat([tf.reshape(ph_obv, [1, dim]), tf.reshape(a, [1, 2])], axis=1)  # r(s, a)
-
+    # # yy: visualize reward
+    # dim = 36
+    # save_dictionary_reward = {}
+    # # restore reward
+    # ph_obv = tf.placeholder(tf.float32, shape=(dim), name='ph_obv')
+    # # a = tf.placeholder(tf.float32, shape=(2,), name='ph_a')
+    #
+    # rew_input = tf.reshape(ph_obv, [1, dim])  # r(s)
+    # # rew_input = tf.concat([tf.reshape(ph_obv, [1, dim]), tf.reshape(a, [1, 2])], axis=1)  # r(s, a)
+    #
     # with tf.variable_scope('skill/discrim/reward'):
     #     loss_reward = relu_net(rew_input, dout=1, **{})
     #
@@ -93,7 +93,7 @@ with tf.Session(config=config) as sess:
     #
     # saver = tf.train.Saver(save_dictionary_reward)
     # saver.restore(sess, f"{log_path}/model")
-    #
+
 
 
 
@@ -113,7 +113,7 @@ with tf.Session(config=config) as sess:
     for idx, var in enumerate(
         tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                           scope=f'action')):
-        save_dictionary[f'action_0_{idx}'] = var
+        save_dictionary[f'action_{idx}'] = var
 
     policies.append(policy)
 
