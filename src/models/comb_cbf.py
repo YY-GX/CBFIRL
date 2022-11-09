@@ -107,8 +107,12 @@ def generate_unsafe_states(S_s, A_s, num_ratio=0.1, num_unsafe_state_each_frame=
             # add bias based on the state of the selected obstacle's state, then we get the unsafe state of our agent
             # axis_range = np.random.choice(np.linspace(DIST_MIN_THRES / 3, DIST_MIN_THRES, 10), 1)[0] / np.sqrt(2)
             # axis_range = (((2 * random.random() - 1) / 100) * 5 + 0.15) / np.sqrt(2)
+            # yy: old generation -> 16obs
             axis_range = np.random.choice([0.01, 0.03, 0.07, 0.1, 0.125, 0.15, 0.2], 1, p=[0.3, 0.225, 0.175, 0.1, 0.1, 0.05, 0.05])[0] / np.sqrt(2)
 
+            axis_range = \
+            np.random.choice([0.01, 0.03, 0.07], 1, p=[0.5, 0.3, 0.2])[
+                0] / np.sqrt(2)
 
             x_direction, y_direction = 2 * random.random() - 1, 2 * random.random() - 1
             x_bias, y_bias = x_direction * axis_range, y_direction * axis_range
@@ -1167,8 +1171,8 @@ def train_init_CBF_NN_new(demo_path,
     np.random.shuffle(S_s)
     np.random.shuffle(S_u)
     # # Only use parts of S_s and S_u
-    S_s = S_s[:8000]
-    S_u = S_u[:8000]
+    S_s = S_s[:2048]
+    S_u = S_u[:2048]
 
     # Add idx -1 to each s_s S_s
     S_s = [(s_s, -1) for s_s in S_s]
@@ -1386,8 +1390,8 @@ if __name__ == '__main__':
 
     # 8 obs
     train_init_CBF_NN_new(demo_path="src/demonstrations/8obs_acc_farther_target.pkl",
-                      log_path="data/trpo_cbf_8obs/pretrain_cbf/log",
-                      cbf_save_path="data/trpo_cbf_8obs/pretrain_cbf/cbf",
+                      log_path="data/trpo_cbf_8obs/pretrain_cbf_2/log",
+                      cbf_save_path="data/trpo_cbf_8obs/pretrain_cbf_2/cbf",
                       num_obs=8,
                       is_load_unsafe_states=False,
                       unsafe_state_path='src/demonstrations/8obs_unsafe_states.npy',)

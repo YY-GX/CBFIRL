@@ -214,6 +214,7 @@ class GaussianMLPPolicy(GaussianMLPModel, Policy):
         samples = self.action_space.unflatten_n(np.squeeze(samples, 1))
         means = self.action_space.unflatten_n(np.squeeze(means, 1))
         log_stds = self.action_space.unflatten_n(np.squeeze(log_stds, 1))
+        # yy: sol-1, insert here
         return samples, dict(mean=means, log_std=log_stds)
 
     def clone(self, name):

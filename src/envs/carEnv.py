@@ -134,7 +134,7 @@ class carEnv(Env):
         if self.step_num >= 100:
             done = True
 
-        if np.linalg.norm(self.agent_state[:2] - self.goal_state[:2]) < config.DIST_MIN_CHECK:
+        if np.linalg.norm(self.agent_state[:2] - self.goal_state[:2]) < config.DIST_SUCC:
             # print("Done, goal reached!")
             # done = True
             # self.agent_state[2:] = 0

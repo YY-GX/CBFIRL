@@ -129,7 +129,7 @@ with tf.Session(config=config) as sess:
     done = False
     ob = env_test.reset()
     succ_cnt, traj_cnt, coll_cnt, cnt = 0, 0, 0, 0
-    video_traj_num = 10
+    video_traj_num = 0
 
     coll_ls, succ_ls = [], []
     last_timestep_state_ls = []
@@ -171,7 +171,7 @@ with tf.Session(config=config) as sess:
 
 
 
-            if traj_cnt <= video_traj_num:
+            if traj_cnt < video_traj_num:
                 imgs.append(env_test.render('rgb_array'))
         else:
             print(">> Eval traj num: ", traj_cnt)

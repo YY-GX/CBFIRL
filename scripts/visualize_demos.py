@@ -62,6 +62,51 @@ def show_safe_demo():
         
 
 
+def show_real_obstacles():
+    size = 100
+    fig = plt.figure(figsize=(9, 9))
+
+    s_ = np.array([[0.6132, 0.8727, -0.0084, -0.0141],
+                  [0.4607, 1.2137, -0.0153, 0.1246],
+                  [0.8423, 1.1289, -0.0711, -0.0384],
+                  [0.8022, 0.4538, 0.1072, 0.0047],
+                  [0.3425, 0.2114, 0.1402, 0.0301],
+                  [0.1919, 0.5605, 0.0043, 0.1608],
+                  [1.1556, 0.7575, -0.0851, -0.1306],
+                  [0.9709, 0.2817, 0.0218, 0.0156]])
+
+    # show the dynamic obstacles
+    plt.scatter(s_[:, 0], s_[:, 1],
+                color='darkorange',
+                s=size, label='Obstacle', alpha=0.6)
+
+    plt.scatter([1.414], [1.414],
+                color='green',
+                s=size, label='Goal Point', alpha=0.6)
+
+    plt.scatter([0], [0],
+                color='blue',
+                s=size, label='Start Point', alpha=0.6)
+
+    plt.legend(prop={'size': 20})
+
+    ax = plt.gca()
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+
+    # # show the agent
+    # plt.scatter(s_u[-1, 0], s_u[-1, 1],
+    #             color='green',
+    #             s=size, label='Agent', alpha=0.6)
+
+    plt.xlim(-0.2, 1.5)
+    plt.ylim(-0.2, 1.5)
+
+    plt.savefig('data/visual_videos/paper_figures/real_agents.png')
+
+
+
+
 def show_unsafe_demo():
     with open('src/demonstrations/unsafe_states_vel_top12.pkl', 'rb') as f:
         S_u, _ = pickle.load(f)
@@ -134,6 +179,19 @@ def show_unsafe_demo():
                       [0.3556, 0.1575, -0.0851, -0.1306],
                       [0.0709, 1.2817, 0.0218, 0.0156]])
 
+    s_ = np.array([[1.2132, 0.6727, -0.0084, -0.0141],
+                      [0.9607, 0.6837, -0.0153, 0.1246],
+                      [0.8423, 1.1289, -0.0711, -0.0384],
+                      [0.9398, 1.2857, 0.0735, -0.0497],
+                      [1.7411, 0.9739, 0.1093, -0.0915],
+                      [1.6691, 0.3678, 0.0378, -0.0756],
+                      [1.4384, 0.1674, 0.0192, 0.0164],
+                      [1.1022, 0.0538, 0.1072, 0.0047],
+                      [0.5425, 0.1114, 0.1402, 0.0301],
+                      [0.1919, 0.5605, 0.0043, 0.1608],
+                      [0.3556, 0.1575, -0.0851, -0.1306],
+                      [0.0709, 1.2817, 0.0218, 0.0156]])
+
     # # simple
     # s_ = np.array([[0.7162, 0.7162, 0., 0.],
     #           [0.4775, 0.4775, 0., 0.],
@@ -147,7 +205,7 @@ def show_unsafe_demo():
 
 
 
-    for i, s_u in enumerate(S_u[:10]):
+    for i, s_u in enumerate(S_u[:1]):
         # s_u = s_u[0]
 
 
@@ -174,7 +232,7 @@ def show_unsafe_demo():
         plt.xlim(-0.0, 1.5)
         plt.ylim(-0.0, 1.5)
 
-        plt.savefig('data/visual_videos/h_visualize/new_vel_ori_v2.png')
+        plt.savefig('data/visual_videos/paper_figures/real_agents.png')
 
         plt.pause(1)
 
@@ -441,9 +499,17 @@ def visualize_h_value():
         cbf_path = "data/comb/16obs_airl_cbf_debug/cbf"
         # cbf_path = "data/simple/airl_cbf_debug/cbf"  # simple
         cbf_path = "data/new_comb_new_demo/cbf_posx_posy_velx_vely/cbf"
+
         cbf_path = "data/trpo_cbf/pretrain_airl/cbf"
         cbf_path = "data/trpo_cbf/pretrain_cbf_from_eval/cbf"
         cbf_path = "data/trpo_cbf_8obs/pretrain_cbf/cbf"
+
+        cbf_path = "data/new_comb_new_demo/cbf_posx_posy/cbf"
+
+        cbf_path = "data/trpo_cbf_8obs/pretrain_cbf_2/cbf"
+        #
+        # cbf_path = "data/trpo_cbf/pretrain_cbf_from_eval/cbf"
+
         save_dictionary_cbf = {}
         for idx, var in enumerate(
                 tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
@@ -540,7 +606,7 @@ def visualize_h_value():
         ax = sns.heatmap(np.array(h_ls_ls))
         ax.invert_yaxis()
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/8obs/posxposy.jpg')
+        plt.savefig('data/visual_videos/8obs/posxposy_smaller_dist.jpg')
 
         # image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8')
         # image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
@@ -577,6 +643,11 @@ def visualize_h_value_vel():
         cbf_path = "data/new_comb_new_demo/cbf_new_demo/cbf"
         cbf_path = "data/new_comb_new_demo/cbf_posx_posy/cbf"
         cbf_path = "data/trpo_cbf_8obs/pretrain_cbf/cbf"
+
+        cbf_path = "data/new_comb_new_demo/cbf_posx_posy/cbf"
+
+        # cbf_path = "data/trpo_cbf_8obs/pretrain_cbf_2/cbf"
+
         # cbf_path = "data/comb/baselines_repro_1/cbf"
         save_dictionary_cbf = {}
         for idx, var in enumerate(
@@ -608,6 +679,26 @@ def visualize_h_value_vel():
                        [0.1919, 0.5605, 0.0043, 0.1608],
                        [0.3556, 0.1575, -0.0851, -0.1306],
                        [0.0709, 1.2817, 0.0218, 0.0156]])
+
+        s_obs = np.array([[1.2132, 0.6727, -0.0084, -0.0141],
+                       [0.9607, 0.6837, -0.0153, 0.1246],
+                       [0.8423, 1.1289, -0.0711, -0.0384],
+                       [0.9398, 1.2857, 0.0735, -0.0497],
+                       [1.7411, 0.9739, 0.1093, -0.0915],
+                       [1.6691, 0.3678, 0.0378, -0.0756],
+                       [1.4384, 0.1674, 0.0192, 0.0164],
+                       [1.1022, 0.0538, 0.1072, 0.0047],])
+
+        s_obs = np.array([[0.6132, 0.8727, -0.0084, -0.0141],
+                  [0.4607, 1.2137, -0.0153, 0.1246],
+                  [0.8423, 1.1289, -0.0711, -0.0384],
+                  [0.8022, 0.4538, 0.1072, 0.0047],
+                  [0.3425, 0.2114, 0.1402, 0.0301],
+                  [0.1919, 0.5605, 0.0043, 0.1608],
+                  [1.1556, 0.7575, -0.0851, -0.1306],
+                  [0.9709, 0.2817, 0.0218, 0.0156]])
+
+
         s_obs = s_obs[:, :2]
 
 
@@ -627,11 +718,14 @@ def visualize_h_value_vel():
             h_ls_ls.append(h_ls)
 
 
-        print(h_ls_ls)
-        ax = sns.heatmap(np.array(h_ls_ls))
+        # print(h_ls_ls)
+        ax = sns.heatmap(np.array(h_ls_ls), xticklabels=False, yticklabels=False)
+        cbar = ax.collections[0].colorbar
+        cbar.ax.tick_params(labelsize=20)
         ax.invert_yaxis()
+        ax.tick_params(left=False, bottom=False)
         fig.canvas.draw()
-        plt.savefig('data/visual_videos/8obs/posxposy.png')
+        plt.savefig('data/visual_videos/paper_figures/h_vis.png')
 
 
 
@@ -643,5 +737,6 @@ if __name__ == "__main__":
     # show_safe_demo()
     # show_unsafe_demo()
     # visualize_learned_reward()
-    visualize_h_value()
+    # visualize_h_value()
     # visualize_h_value_vel()
+    show_real_obstacles()

@@ -75,10 +75,10 @@ FOLDER="data/just_airl/"
 cd .. && pwd &&
 for s in "${seeds[@]}";
   do
-    mainfolder="${FOLDER}airl_$i"
+    mainfolder="${FOLDER}airl_80epoch_$i"
     python scripts/train_airl.py \
      --seed $s \
-     --epoch_num 200 \
+     --epoch_num 80 \
      --share_pth "${mainfolder}/share" --airl_pth "${mainfolder}/airl"
     i=$(($i+1))
   done
